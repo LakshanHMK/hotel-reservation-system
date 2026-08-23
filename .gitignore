@@ -1,0 +1,27 @@
+# Environment secret files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build and runtime outputs
+backend/target/
+backend/.mvn-repository/
+frontend/node_modules/
+frontend/dist/
+*.log
+*.zip
+
+# OS and IDE junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# User uploads (keep directory structure tracked via .gitkeep)
+uploads/*
+!uploads/.gitkeep
+!uploads/destinations/
+!uploads/destinations/.gitkeep
+!uploads/hotels/
+!uploads/hotels/.gitkeep
