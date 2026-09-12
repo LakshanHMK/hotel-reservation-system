@@ -198,6 +198,17 @@ public class SeedDataInitializer implements CommandLineRunner {
                 logger.info("Seeded canonical RoomRate records into MySQL database.");
             }
 
+            Integer discountCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM discounts", Integer.class);
+            if (discountCount == null || discountCount == 0) {
+                jdbcTemplate.update("INSERT INTO discounts (id, hotel_id, code, title, description, discount_type, discount_value, minimum_nights, valid_from, valid_to, status, created_at, updated_at) " +
+                        "VALUES (1, 301, 'SUMMER20', 'Summer Getaway 20%', 'Get 20% off for stays with 2+ nights', 'PERCENTAGE', 20.0, 2, '2026-06-01', '2026-09-30', 'ACTIVE', ?, ?)", now, now);
+
+                jdbcTemplate.update("INSERT INTO discounts (id, hotel_id, code, title, description, discount_type, discount_value, minimum_nights, valid_from, valid_to, status, created_at, updated_at) " +
+                        "VALUES (2, 302, 'EARLYBIRD', 'Early Bird Special', 'Save 15% on early bookings', 'PERCENTAGE', 15.0, 1, '2026-01-01', '2026-12-31', 'ACTIVE', ?, ?)", now, now);
+
+                logger.info("Seeded canonical Discount records into MySQL database.");
+            }
+
             Integer resCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM reservations", Integer.class);
             if (resCount == null || resCount == 0) {
                 java.time.LocalDate today = java.time.LocalDate.now();
