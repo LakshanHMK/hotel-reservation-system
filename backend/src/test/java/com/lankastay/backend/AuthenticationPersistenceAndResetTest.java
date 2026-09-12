@@ -2,10 +2,8 @@ package com.lankastay.backend;
 
 import com.lankastay.backend.dto.auth.*;
 import com.lankastay.backend.entity.CustomerUser;
-import com.lankastay.backend.entity.StaffUser;
 import com.lankastay.backend.repository.CustomerUserRepository;
 import com.lankastay.backend.repository.PasswordResetTokenRepository;
-import com.lankastay.backend.repository.StaffUserRepository;
 import com.lankastay.backend.service.CustomerAuthenticationService;
 import com.lankastay.backend.service.PasswordResetService;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Optional;
 
@@ -22,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
+@ActiveProfiles("dev")
 public class AuthenticationPersistenceAndResetTest {
 
     @Autowired
@@ -32,9 +32,6 @@ public class AuthenticationPersistenceAndResetTest {
 
     @Autowired
     private CustomerUserRepository customerRepository;
-
-    @Autowired
-    private StaffUserRepository staffRepository;
 
     @Autowired
     private PasswordResetTokenRepository tokenRepository;
@@ -128,24 +125,4 @@ public class AuthenticationPersistenceAndResetTest {
         assertThrows(RuntimeException.class, () -> passwordResetService.resetPassword(resetReq, "127.0.0.1"));
     }
 
-    @Test
-    @org.springframework.test.annotation.Commit
-    @DisplayName("Reset manager@lankastay.local password in MySQL DB")
-    void resetManagerPasswordToCustom() {
-        StaffUser manager = staffRepository.findByEmail("manager@lankastay.local")
-                .orElseGet(() -> {
-                    StaffUser m = new StaffUser();
-                    m.setEmail("manager@lankastay.local");
-                    m.setFirstName("Hotel");
-                    m.setLastName("Manager");
-                    m.setRole(com.lankastay.backend.entity.StaffRole.MANAGER);
-                    return m;
-                });
-        manager.setPasswordHash(passwordEncoder.encode("githubjsjava2027@"));
-        manager.setMustChangePassword(false);
-        manager.setFailedLoginAttempts(0);
-        manager.setLockedUntil(null);
-        manager.setStatus(com.lankastay.backend.entity.StaffStatus.ACTIVE);
-        staffRepository.save(manager);
-    }
 }

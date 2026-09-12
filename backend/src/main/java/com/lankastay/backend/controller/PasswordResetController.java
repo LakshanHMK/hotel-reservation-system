@@ -7,8 +7,10 @@ import com.lankastay.backend.service.PasswordResetService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.Map;
 
 @RestController
@@ -16,9 +18,11 @@ import java.util.Map;
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
+    private final Environment environment;
 
-    public PasswordResetController(PasswordResetService passwordResetService) {
+    public PasswordResetController(PasswordResetService passwordResetService, Environment environment) {
         this.passwordResetService = passwordResetService;
+        this.environment = environment;
     }
 
     @PostMapping("/forgot-password")
@@ -41,6 +45,9 @@ public class PasswordResetController {
 
     @GetMapping("/dev-last-reset-link")
     public ResponseEntity<Map<String, String>> getDevLastResetLink(@RequestParam(required = false) String email, HttpServletRequest request) {
+        if (Arrays.stream(environment.getActiveProfiles()).noneMatch("dev"::equals)) {
+            return ResponseEntity.notFound().build();
+        }
         String ip = clientIp(request);
         if (!"127.0.0.1".equals(ip) && !"0:0:0:0:0:0:0:1".equals(ip) && !"localhost".equalsIgnoreCase(ip)) {
             return ResponseEntity.status(403).build();
