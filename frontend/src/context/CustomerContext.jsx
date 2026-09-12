@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import initialCustomer from '../data/customer.js'
 import CustomerContext from './customerContext.js'
 import { authApi } from '../services/authApi.js'
 
+const emptyCustomer = {
+  id: null,
+  email: '',
+  firstName: '',
+  lastName: '',
+  phone: '',
+  role: '',
+  status: '',
+  createdAt: null,
+  memberSince: '',
+  isLoggedIn: false,
+}
+
 export function CustomerProvider({ children }) {
-  const [customer, setCustomer] = useState({ ...initialCustomer, isLoggedIn: false })
+  const [customer, setCustomer] = useState(emptyCustomer)
   const [loading, setLoading] = useState(true)
 
   const refreshCustomer = useCallback(async () => {
@@ -12,15 +24,16 @@ export function CustomerProvider({ children }) {
       const data = await authApi.customerMe()
       if (data && data.email) {
         setCustomer({
-          ...initialCustomer,
+          ...emptyCustomer,
           ...data,
-          memberSince: data.createdAt ? data.createdAt.slice(0, 10) : '2026-01-01',
+          memberSince: data.createdAt ? data.createdAt.slice(0, 10) : '',
           isLoggedIn: true,
         })
         return data
       }
+      setCustomer({ ...emptyCustomer, isLoggedIn: false })
     } catch {
-      setCustomer((prev) => ({ ...prev, isLoggedIn: false }))
+      setCustomer({ ...emptyCustomer, isLoggedIn: false })
     } finally {
       setLoading(false)
     }
@@ -30,12 +43,18 @@ export function CustomerProvider({ children }) {
     refreshCustomer()
   }, [refreshCustomer])
 
+  useEffect(() => {
+    const clearExpiredCustomer = () => setCustomer({ ...emptyCustomer })
+    window.addEventListener('lankastay:customer-unauthorized', clearExpiredCustomer)
+    return () => window.removeEventListener('lankastay:customer-unauthorized', clearExpiredCustomer)
+  }, [])
+
   const loginCustomer = useCallback(async (credentials) => {
     const data = await authApi.customerLogin(credentials)
     const activeCustomer = {
-      ...initialCustomer,
+      ...emptyCustomer,
       ...data,
-      memberSince: data.createdAt ? data.createdAt.slice(0, 10) : '2026-01-01',
+      memberSince: data.createdAt ? data.createdAt.slice(0, 10) : '',
       isLoggedIn: true,
     }
     setCustomer(activeCustomer)
@@ -51,13 +70,29 @@ export function CustomerProvider({ children }) {
     try {
       await authApi.customerLogout()
     } finally {
-      setCustomer({ ...initialCustomer, isLoggedIn: false })
+      setCustomer({ ...emptyCustomer, isLoggedIn: false })
     }
   }, [])
 
-  const updateCustomer = useCallback((updates) => {
-    setCustomer((current) => ({ ...current, ...updates }))
-    return { success: true }
+  const updateCustomer = useCallback(async (updates) => {
+    const data = await authApi.updateCustomerProfile({
+      firstName: updates.firstName,
+      lastName: updates.lastName,
+      phone: updates.phone,
+      email: updates.email,
+    })
+    const updated = {
+      ...emptyCustomer,
+      ...data,
+      memberSince: data.createdAt ? data.createdAt.slice(0, 10) : '',
+      isLoggedIn: true,
+    }
+    setCustomer(updated)
+    return { success: true, customer: updated }
+  }, [])
+
+  const changePassword = useCallback(async (passwordData) => {
+    return await authApi.customerChangePassword(passwordData)
   }, [])
 
   const value = useMemo(
@@ -68,9 +103,10 @@ export function CustomerProvider({ children }) {
       registerCustomer,
       logoutCustomer,
       updateCustomer,
+      changePassword,
       refreshCustomer,
     }),
-    [customer, loading, loginCustomer, registerCustomer, logoutCustomer, updateCustomer, refreshCustomer]
+    [customer, loading, loginCustomer, registerCustomer, logoutCustomer, updateCustomer, changePassword, refreshCustomer]
   )
 
   return <CustomerContext.Provider value={value}>{children}</CustomerContext.Provider>

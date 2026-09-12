@@ -1,6 +1,6 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
-let csrfToken = null
+let csrf = null
 let csrfPromise = null
 
 async function readJson(response) {
@@ -11,14 +11,26 @@ async function readJson(response) {
 }
 
 async function ensureCsrf() {
-  if (csrfToken) return csrfToken
+  if (csrf) return csrf
   if (!csrfPromise) {
     csrfPromise = fetch(`${API_BASE_URL}/api/v1/auth/csrf`, { credentials: 'include' })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Could not initialize secure authentication.')
+        if (!response.ok) {
+          const error = new Error(`Could not initialize secure authentication (HTTP ${response.status}).`)
+          error.status = response.status
+          throw error
+        }
         const body = await response.json()
-        csrfToken = body.token
-        return csrfToken
+        if (!body?.token || !body?.headerName) throw new Error('The authentication service returned an invalid CSRF response.')
+        csrf = { token: body.token, headerName: body.headerName }
+        return csrf
+      })
+      .catch((cause) => {
+        if (cause?.status !== undefined) throw cause
+        const error = new Error(`The browser could not connect to ${API_BASE_URL}. Check the frontend origin and CORS configuration.`)
+        error.status = 0
+        error.cause = cause
+        throw error
       })
       .finally(() => { csrfPromise = null })
   }
@@ -28,13 +40,30 @@ async function ensureCsrf() {
 export async function apiRequest(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
   const headers = new Headers(options.headers)
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) headers.set('X-XSRF-TOKEN', await ensureCsrf())
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrfHeader = await ensureCsrf()
+    headers.set(csrfHeader.headerName, csrfHeader.token)
+  }
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, method, headers, credentials: 'include' })
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, method, headers, credentials: 'include' })
+  } catch (cause) {
+    const error = new Error(`The browser could not connect to ${API_BASE_URL}. Check the frontend origin and CORS configuration.`)
+    error.status = 0
+    error.cause = cause
+    throw error
+  }
   const body = await readJson(response)
   if (!response.ok) {
-    if (response.status === 401 && path !== '/api/v1/auth/login' && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('lankastay:auth-error', { detail: { status: response.status, body } }))
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const isCustomerRequest = path.startsWith('/api/v1/customer/')
+      const isLoginRequest = path === '/api/v1/auth/login' || path === '/api/v1/customer/auth/login'
+      if (!isLoginRequest) {
+        window.dispatchEvent(new CustomEvent(isCustomerRequest
+          ? 'lankastay:customer-unauthorized'
+          : 'lankastay:auth-error', { detail: { status: response.status, body } }))
+      }
     }
     if (response.status === 403 && body?.message === 'Initial password change is required.' && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('lankastay:auth-error', { detail: { status: response.status, body } }))
@@ -52,19 +81,25 @@ export const authApi = {
   login: (credentials) => apiRequest('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   changeInitialPassword: (data) => apiRequest('/api/v1/auth/change-initial-password', { method: 'POST', body: JSON.stringify(data) }),
   changePassword: (data) => apiRequest('/api/v1/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  checkStaffForgotPasswordEmail: (data) => apiRequest('/api/v1/auth/forgot-password/check-email', { method: 'POST', body: JSON.stringify(data) }),
+  changeStaffForgottenPassword: (data) => apiRequest('/api/v1/auth/forgot-password/change-password', { method: 'POST', body: JSON.stringify(data) }),
   logout: async () => {
     try { return await apiRequest('/api/v1/auth/logout', { method: 'POST' }) }
-    finally { csrfToken = null }
+    finally { csrf = null }
   },
   customerRegister: (data) => apiRequest('/api/v1/customer/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   customerLogin: (credentials) => apiRequest('/api/v1/customer/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  checkCustomerForgotPasswordEmail: (data) => apiRequest('/api/v1/customer/auth/forgot-password/check-email', { method: 'POST', body: JSON.stringify(data) }),
+  changeCustomerForgottenPassword: (data) => apiRequest('/api/v1/customer/auth/forgot-password/change-password', { method: 'POST', body: JSON.stringify(data) }),
   customerMe: () => apiRequest('/api/v1/customer/auth/me'),
+  customerProfile: () => apiRequest('/api/v1/customer/profile'),
+  updateCustomerProfile: (data) => apiRequest('/api/v1/customer/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  customerChangePassword: (data) => apiRequest('/api/v1/customer/profile/change-password', { method: 'POST', body: JSON.stringify(data) }),
   customerLogout: async () => {
     try { return await apiRequest('/api/v1/customer/auth/logout', { method: 'POST' }) }
-    finally { csrfToken = null }
+    finally { csrf = null }
   },
   forgotPassword: (data) => apiRequest('/api/v1/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
   resetPassword: (data) => apiRequest('/api/v1/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }),
   getDevLastResetLink: (email) => apiRequest(`/api/v1/auth/dev-last-reset-link${email ? `?email=${encodeURIComponent(email)}` : ''}`),
 }
-

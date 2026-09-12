@@ -66,8 +66,8 @@ function Register() {
     if (!trimmedPhone) nextErrors.phone = "Phone number is required.";
     else if (!isValidPhone(trimmedPhone)) nextErrors.phone = "Enter a valid phone number using digits, spaces, and an optional +.";
     if (!password) nextErrors.password = "Password is required.";
-    else if (!passwordChecks.length || !passwordChecks.letter || !passwordChecks.number) {
-      nextErrors.password = "Use at least 8 characters with a letter and a number.";
+    else if (!passwordChecks.length || !passwordChecks.uppercase || !passwordChecks.lowercase || !passwordChecks.number || !passwordChecks.special) {
+      nextErrors.password = "Password must be at least 8 characters with uppercase, lowercase, number, and a special character.";
     }
     if (!confirmPassword) nextErrors.confirmPassword = "Please confirm your password.";
     else if (confirmPassword !== password) nextErrors.confirmPassword = "Passwords do not match.";
@@ -265,8 +265,9 @@ function Register() {
           </div>
           <ul className="password-requirements">
             <li className={passwordChecks.length ? "is-met" : ""}><Check aria-hidden="true" size={12} />At least 8 characters</li>
-            <li className={passwordChecks.letter ? "is-met" : ""}><Check aria-hidden="true" size={12} />Include a letter</li>
+            <li className={passwordChecks.uppercase && passwordChecks.lowercase ? "is-met" : ""}><Check aria-hidden="true" size={12} />Upper & lowercase letters</li>
             <li className={passwordChecks.number ? "is-met" : ""}><Check aria-hidden="true" size={12} />Include a number</li>
+            <li className={passwordChecks.special ? "is-met" : ""}><Check aria-hidden="true" size={12} />Special character (@$!%*#?&)</li>
           </ul>
         </div>
 
