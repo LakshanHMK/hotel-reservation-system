@@ -55,9 +55,10 @@ function StaffLogin() {
       const requested = location.state?.from?.pathname
       navigate(requested?.startsWith('/management/') ? requested : STAFF_LOGIN_DESTINATIONS[result.user.role] || '/management/dashboard', { replace: true })
     } catch (error) {
-      if (error.status === 401) setStatus('Invalid email or password')
+      if (error.status === 401) setStatus('Invalid email or password.')
       else if (error.status === 429) setStatus(error.message)
-      else setStatus('Unable to reach the secure sign-in service. Please try again.')
+      else if (error.status === 0) setStatus('The browser could not reach the sign-in API. Confirm the frontend is running at http://localhost:5174 and try again.')
+      else setStatus(error.message || `Sign in failed with HTTP ${error.status}.`)
     } finally { setSubmitting(false) }
   }
 
