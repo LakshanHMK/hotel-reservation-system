@@ -3,6 +3,7 @@ package com.lankastay.backend.service;
 import com.lankastay.backend.dto.auth.CustomerLoginRequest;
 import com.lankastay.backend.dto.auth.CustomerRegisterRequest;
 import com.lankastay.backend.dto.auth.CustomerResponse;
+import com.lankastay.backend.dto.auth.SimpleForgotPasswordRequest;
 import com.lankastay.backend.entity.CustomerUser;
 import com.lankastay.backend.entity.SecurityEventType;
 import com.lankastay.backend.exception.ApiException;
@@ -104,6 +105,85 @@ public class CustomerAuthenticationService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized", "Account is inactive.");
         }
         return customer;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean forgotPasswordEmailExists(String email) {
+        return customerRepository.existsByEmail(CustomerUser.normalizeEmail(email));
+    }
+
+    @Transactional
+    public void resetForgottenPassword(SimpleForgotPasswordRequest request, String ipAddress) {
+        String normalizedEmail = CustomerUser.normalizeEmail(request.email());
+        CustomerUser customer = customerRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Not Found", "No account found with this email."));
+
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password and confirmation do not match.");
+        }
+
+        passwordPolicy.validate(request.newPassword());
+        if (encoder.matches(request.newPassword(), customer.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password must be different from current password.");
+        }
+
+        customer.setPasswordHash(encoder.encode(request.newPassword()));
+        customer.setFailedLoginAttempts(0);
+        customer.setLockedUntil(null);
+        customerRepository.save(customer);
+        audit.record(customer.getId(), customer.getId(), SecurityEventType.PASSWORD_RESET_COMPLETED, ipAddress, "SUCCESS");
+    }
+
+    @Transactional
+    public CustomerResponse updateProfile(UUID customerId, com.lankastay.backend.dto.auth.UpdateCustomerProfileRequest request, String ipAddress) {
+        CustomerUser customer = requireActive(customerId);
+
+        if (request.email() != null && !request.email().isBlank()) {
+            String normalized = CustomerUser.normalizeEmail(request.email());
+            if (!normalized.equalsIgnoreCase(customer.getEmail())) {
+                if (customerRepository.existsByEmail(normalized)) {
+                    throw new ApiException(HttpStatus.CONFLICT, "Conflict", "An account already exists for this email address.");
+                }
+                customer.setEmail(normalized);
+            }
+        }
+
+        customer.setFirstName(request.firstName().trim());
+        customer.setLastName(request.lastName().trim());
+        if (request.phone() != null) {
+            customer.setPhone(request.phone().trim());
+        } else {
+            customer.setPhone(null);
+        }
+
+        CustomerUser saved = customerRepository.save(customer);
+        audit.record(saved.getId(), saved.getId(), SecurityEventType.CUSTOMER_PROFILE_UPDATED, ipAddress, "SUCCESS");
+        return CustomerResponse.from(saved);
+    }
+
+    @Transactional
+    public void changePassword(UUID customerId, com.lankastay.backend.dto.auth.CustomerChangePasswordRequest request, String ipAddress) {
+        if (!request.newPassword().equals(request.confirmNewPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password and confirmation do not match.");
+        }
+
+        passwordPolicy.validate(request.newPassword());
+
+        CustomerUser customer = requireActive(customerId);
+
+        if (!encoder.matches(request.currentPassword(), customer.getPasswordHash())) {
+            audit.record(customer.getId(), customer.getId(), SecurityEventType.CUSTOMER_PASSWORD_CHANGED, ipAddress, "FAILED");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Bad Request", "Current password is incorrect.");
+        }
+
+        if (encoder.matches(request.newPassword(), customer.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password must be different from current password.");
+        }
+
+        customer.setPasswordHash(encoder.encode(request.newPassword()));
+        customerRepository.save(customer);
+
+        audit.record(customer.getId(), customer.getId(), SecurityEventType.CUSTOMER_PASSWORD_CHANGED, ipAddress, "SUCCESS");
     }
 
     private ApiException invalidCredentials() {
