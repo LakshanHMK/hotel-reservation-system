@@ -61,12 +61,17 @@ public class SecurityConfig {
                 .csrf(config -> config.csrfTokenRepository(csrf))
                 .securityContext(config -> config.securityContextRepository(contextRepository))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/destinations/**", "/api/public/hotels/**", "/uploads/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/destinations/**", "/api/public/**", "/uploads/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password", "/api/v1/auth/forgot-password/check-email",
+                                "/api/v1/auth/forgot-password/change-password").permitAll()
                         .requestMatchers("/api/v1/auth/dev-last-reset-link").permitAll()
                         .requestMatchers("/api/v1/customer/auth/**").permitAll()
+                        // Customer sessions are validated inside customer controllers; they are deliberately
+                        // separate from the staff SecurityContext and all mutations remain CSRF protected.
+                        .requestMatchers("/api/v1/customer/reservations/**", "/api/v1/customer/reviews/**", "/api/v1/customer/profile/**").permitAll()
                         .requestMatchers("/api/v1/admin/staff/**").hasRole("MANAGER")
-                        .requestMatchers("/api/v1/hotels/**", "/api/management/**", "/api/media/**").hasAnyRole("MANAGER", "HOTEL_STAFF")
+                        .requestMatchers("/api/v1/hotels/**", "/api/management/**", "/api/v1/management/**", "/api/media/**").hasAnyRole("MANAGER", "HOTEL_STAFF", "RECEPTIONIST")
                         .requestMatchers("/api/v1/auth/**").authenticated()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
@@ -90,7 +95,7 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(
-            @Value("${lankastay.security.allowed-origins:http://localhost:5174,http://localhost:5173}") String origins) {
+            @Value("${lankastay.security.allowed-origins:http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://127.0.0.1:5173}") String origins) {
         CorsConfiguration configuration = new CorsConfiguration();
         // Security: credentialed CORS explicitly allows trusted development origins instead of using a wildcard.
         configuration.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).filter(s -> !s.isBlank()).toList());
