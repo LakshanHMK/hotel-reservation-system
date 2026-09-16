@@ -11,11 +11,13 @@ import {
   MessageSquareText,
   ReceiptText,
   Star,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 
 import CancelReservationModal from "../../components/CancelReservationModal/CancelReservationModal.jsx";
+import ManagementDialog from "../../components/ManagementDialog/ManagementDialog.jsx";
 import useHotels from "../../context/useHotels.js";
 import useReservations from "../../context/useReservations.js";
 import useRooms from "../../context/useRooms.js";
@@ -43,10 +45,12 @@ function getSafeAmount(value, fallback = 0) {
 function ReservationDetails() {
   const { id } = useParams();
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [message, setMessage] = useState("");
+  const navigate = useNavigate();
   const { hotels } = useHotels();
   const { rooms } = useRooms();
-  const { getReservationById, cancelReservation, reservationsLoading, reservationsError } = useReservations();
+  const { getReservationById, cancelReservation, deleteReservation, reservationsLoading, reservationsError } = useReservations();
   const reservation = getReservationById(id);
 
   if (reservationsLoading) return <section className="reservation-details-state"><h1>Loading reservation…</h1></section>;
@@ -244,6 +248,11 @@ function ReservationDetails() {
                   <Star aria-hidden="true" size={17} />Review Stay
                 </Link>
               )}
+              {isCancelled && (
+                <button type="button" className="reservation-details-action-danger" onClick={() => setShowDeleteDialog(true)}>
+                  <Trash2 aria-hidden="true" size={16} />Delete Permanently
+                </button>
+              )}
               <Link className="reservation-details-action-back" to="/my-reservations">
                 <ArrowLeft aria-hidden="true" size={16} />Back to My Reservations
               </Link>
@@ -263,6 +272,26 @@ function ReservationDetails() {
           setShowCancelModal(false);
         }}
       />
+      {showDeleteDialog && (
+        <ManagementDialog
+          danger
+          title="Permanently delete this reservation?"
+          description="This action cannot be undone."
+          onClose={() => setShowDeleteDialog(false)}
+          actions={<>
+            <button type="button" onClick={() => setShowDeleteDialog(false)}>Cancel</button>
+            <button className="danger" type="button" onClick={async () => {
+              const result = await deleteReservation(reservation.id);
+              if (result.error) {
+                setMessage(result.error);
+                setShowDeleteDialog(false);
+                return;
+              }
+              navigate("/my-reservations", { replace: true, state: { message: "Reservation permanently deleted." } });
+            }}>Delete Permanently</button>
+          </>}
+        />
+      )}
     </div>
   );
 }

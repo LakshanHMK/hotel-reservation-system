@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
 import java.util.List;
 
 @RestController
@@ -15,6 +16,19 @@ import java.util.List;
 public class ManagementReservationController {
     private final ManagementReservationService service;
     public ManagementReservationController(ManagementReservationService service) { this.service = service; }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReservationResponse create(@Valid @RequestBody CreateReservationRequest request,
+                                      @AuthenticationPrincipal StaffPrincipal principal) {
+        return service.create(principal, request);
+    }
+
+    @PostMapping("/quote")
+    public ReservationQuoteResponse quote(@Valid @RequestBody ReservationQuoteRequest request,
+                                          @AuthenticationPrincipal StaffPrincipal principal) {
+        return service.quote(principal, request);
+    }
 
     @GetMapping
     public List<ReservationResponse> list(@RequestParam(required = false) Long hotelId, @AuthenticationPrincipal StaffPrincipal principal) {

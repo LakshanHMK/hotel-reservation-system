@@ -5,7 +5,7 @@ import {
   Compass,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 
 import CancelReservationModal from "../../components/CancelReservationModal/CancelReservationModal.jsx";
 import ManagementDialog from "../../components/ManagementDialog/ManagementDialog.jsx";
@@ -45,10 +45,11 @@ function sortReservationsByStatus(items, status) {
 }
 
 function MyReservations() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("CONFIRMED");
   const [cancellationReservation, setCancellationReservation] = useState(null);
   const [deletionReservation, setDeletionReservation] = useState(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(location.state?.message || "");
   const { hotels } = useHotels();
   const { rooms } = useRooms();
   const { customer } = useCustomer();

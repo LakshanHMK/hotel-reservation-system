@@ -38,6 +38,7 @@ class ReservationIntegrationTest {
     @Autowired HotelRepository hotels;
     @Autowired CustomerUserRepository customers;
     @Autowired ReviewRepository reviews;
+    @Autowired ReservationPhysicalRoomRepository assignments;
 
     private CustomerUser customerA;
     private CustomerUser customerB;
@@ -96,6 +97,22 @@ class ReservationIntegrationTest {
     }
 
     @Test
+    void availabilityDiscoveryIsPublicButReservationWritesStillRequireASession() throws Exception {
+        mvc.perform(get("/api/v1/customer/reservations/availability")
+                        .param("hotelId", hotel.getId().toString())
+                        .param("roomId", room.getId().toString())
+                        .param("checkIn", base.toString())
+                        .param("checkOut", base.plusDays(2).toString())
+                        .param("quantity", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
+
+        mvc.perform(post("/api/v1/customer/reservations")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void validatesDatesCapacityHotelRoomAndRateRelationships() {
         assertThatThrownBy(() -> create(customerA, room, rate, base, base, 1)).isInstanceOf(ApiException.class);
         CreateReservationRequest excessGuests = request(room, rate, base, base.plusDays(1), 1, 3, 0);
@@ -145,6 +162,12 @@ class ReservationIntegrationTest {
     @Test
     void customerCanPermanentlyDeleteOnlyTheirCancelledReservation() {
         ReservationResponse saved = create(customerA, room, rate, base, base.plusDays(2), 1);
+        ReservationPhysicalRoom assignment = new ReservationPhysicalRoom();
+        assignment.setReservationId(saved.id());
+        assignment.setPhysicalRoomId(999L);
+        assignments.save(assignment);
+        assertThat(assignments.countByReservationId(saved.id())).isOne();
+        int beforeBooking = customerService.availability(hotel.getId(), room.getId(), base, base.plusDays(2), 1).availableQuantity();
 
         assertThatThrownBy(() -> customerService.delete(customerA.getId(), saved.id()))
                 .isInstanceOf(ConflictException.class);
@@ -153,10 +176,74 @@ class ReservationIntegrationTest {
                 .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
 
         customerService.cancel(customerA.getId(), saved.id(), new CancellationRequest("Change of plans", null));
+        int afterCancel = customerService.availability(hotel.getId(), room.getId(), base, base.plusDays(2), 1).availableQuantity();
         customerService.delete(customerA.getId(), saved.id());
 
         assertThat(reservations.findById(saved.id())).isEmpty();
         assertThat(items.findByReservationId(saved.id())).isEmpty();
+        assertThat(assignments.countByReservationId(saved.id())).isZero();
+        assertThat(afterCancel).isEqualTo(beforeBooking + 1);
+        assertThat(customerService.availability(hotel.getId(), room.getId(), base, base.plusDays(2), 1).availableQuantity())
+                .isEqualTo(afterCancel);
+        assertThatThrownBy(() -> customerService.delete(customerA.getId(), saved.id()))
+                .isInstanceOf(ApiException.class)
+                .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void completedReservationCannotBePermanentlyDeleted() {
+        ReservationResponse saved = create(customerA, room, rate, base, base.plusDays(2), 1);
+        Reservation completed = reservations.findById(saved.id()).orElseThrow();
+        completed.setReservationStatus(ReservationStatus.COMPLETED);
+        reservations.save(completed);
+
+        assertThatThrownBy(() -> customerService.delete(customerA.getId(), saved.id()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Only cancelled reservations");
+        assertThat(reservations.findById(saved.id())).isPresent();
+    }
+
+    @Test
+    void customerDeleteEndpointEnforcesStatusAndOwnershipThenReturnsNoContent() throws Exception {
+        ReservationResponse saved = create(customerA, room, rate, base, base.plusDays(2), 1);
+
+        mvc.perform(delete("/api/v1/customer/reservations/" + saved.id()).session(customerSession(customerA)).with(csrf()))
+                .andExpect(status().isConflict());
+        mvc.perform(delete("/api/v1/customer/reservations/" + saved.id()).session(customerSession(customerB)).with(csrf()))
+                .andExpect(status().isNotFound());
+
+        customerService.cancel(customerA.getId(), saved.id(), new CancellationRequest("Change of plans", null));
+        mvc.perform(delete("/api/v1/customer/reservations/" + saved.id()).session(customerSession(customerA)).with(csrf()))
+                .andExpect(status().isNoContent());
+        assertThat(reservations.findById(saved.id())).isEmpty();
+    }
+
+    @Test
+    void unsupportedCustomerReservationEditReturnsMethodNotAllowedInsteadOfServerError() throws Exception {
+        ReservationResponse saved = create(customerA, room, rate, base, base.plusDays(2), 1);
+
+        mvc.perform(patch("/api/v1/customer/reservations/" + saved.id())
+                        .session(customerSession(customerA)).with(csrf())
+                        .contentType("application/json")
+                        .content("{\"specialRequests\":\"Unsupported edit probe\"}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.error").value("Method Not Allowed"));
+        assertThat(reservations.findById(saved.id()).orElseThrow().getSpecialRequests()).isNull();
+    }
+
+    @Test
+    void paidCancelledReservationIsPreservedForFinancialSafety() {
+        ReservationResponse saved = create(customerA, room, rate, base, base.plusDays(2), 1);
+        customerService.cancel(customerA.getId(), saved.id(), new CancellationRequest("Change of plans", null));
+        Reservation paid = reservations.findById(saved.id()).orElseThrow();
+        paid.setPaymentStatus(PaymentStatus.PAID);
+        reservations.save(paid);
+
+        assertThatThrownBy(() -> customerService.delete(customerA.getId(), saved.id()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("paid or partially paid");
+        assertThat(reservations.findById(saved.id())).isPresent();
     }
 
     @Test

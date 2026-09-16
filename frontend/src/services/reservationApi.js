@@ -11,7 +11,9 @@ export const reservationApi = {
   deleteCustomer: (id) => apiRequest(`/api/v1/customer/reservations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   availability: (params) => apiRequest(`/api/v1/customer/reservations/availability?${query(params)}`),
   listManagement: (hotelId) => apiRequest(`/api/v1/management/reservations${hotelId ? `?hotelId=${encodeURIComponent(hotelId)}` : ''}`),
+  quoteManagement: (data) => apiRequest('/api/v1/management/reservations/quote', { method: 'POST', body: JSON.stringify(data) }),
+  createManagement: (data) => apiRequest('/api/v1/management/reservations', { method: 'POST', body: JSON.stringify(data) }),
   updateManagementStatus: (id, data) => apiRequest(`/api/v1/management/reservations/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   cancelManagement: (id, data) => apiRequest(`/api/v1/management/reservations/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: JSON.stringify(data) }),
-  assignManagementRoom: (id, roomNumber) => apiRequest(`/api/v1/management/reservations/${encodeURIComponent(id)}/assign-room`, { method: 'PATCH', body: JSON.stringify({ roomNumber }) }),
+  assignManagementRoom: (id, roomNumber, remove = false) => apiRequest(`/api/v1/management/reservations/${encodeURIComponent(id)}/assign-room`, { method: 'PATCH', body: JSON.stringify({ roomNumber, remove }) }),
 }

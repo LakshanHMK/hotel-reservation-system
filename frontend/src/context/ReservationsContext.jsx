@@ -10,7 +10,14 @@ function normalize(reservation) {
   return {
     ...reservation,
     roomTypeId: reservation.roomTypeId ?? reservation.roomId,
-    items: (reservation.items || []).map((item) => ({ ...item, assignedPhysicalRoomIds: item.assignedPhysicalRoomIds || [] })),
+    items: (reservation.items || []).map((item, index) => ({
+      ...item,
+      assignedPhysicalRoomIds: index === 0 && Array.isArray(reservation.assignedPhysicalRoomIds)
+        ? reservation.assignedPhysicalRoomIds
+        : index === 0 && reservation.assignedPhysicalRoomId
+          ? [reservation.assignedPhysicalRoomId]
+          : item.assignedPhysicalRoomIds || [],
+    })),
   }
 }
 
@@ -58,9 +65,10 @@ export function ReservationsProvider({ children }) {
 
   const getReservationById = useCallback((id) => reservations.find((item) => String(item.id) === String(id)), [reservations])
   const localAvailability = useCallback((query) => {
-    const hasPhysicalInventory = physicalRooms.some((room) => String(room.roomTypeId) === String(query.roomTypeId))
     const roomType = rooms.find((room) => String(room.id) === String(query.roomTypeId))
-    const inventory = hasPhysicalInventory ? physicalRooms : Array.from({ length: Number(roomType?.inventoryCount || 0) }, (_, index) => ({ id: `inventory-${roomType?.id}-${index}`, hotelId: roomType?.hotelId, roomTypeId: roomType?.id, operationalStatus: 'AVAILABLE' }))
+    const named = physicalRooms.filter((room) => String(room.roomTypeId) === String(query.roomTypeId))
+    const unnamedCount = Math.max(0, Number(roomType?.inventoryCount || 0) - named.length)
+    const inventory = [...physicalRooms, ...Array.from({ length: unnamedCount }, (_, index) => ({ id: `inventory-${roomType?.id}-${index}`, hotelId: roomType?.hotelId, roomTypeId: roomType?.id, operationalStatus: 'AVAILABLE' }))]
     return checkReservationAvailability({ ...query, reservations, physicalRooms: inventory })
   }, [reservations, rooms, physicalRooms])
   const checkReservationAvailabilityRemote = useCallback(async (query) => {
@@ -72,11 +80,32 @@ export function ReservationsProvider({ children }) {
     try { return await reservationApi.quote(query) }
     catch (error) { return { available: false, ...requestError(error, true) } }
   }, [])
+  const getManagementReservationQuote = useCallback(async (query) => {
+    try { return await reservationApi.quoteManagement(query) }
+    catch (error) { return { available: false, ...requestError(error, true) } }
+  }, [])
 
   const addReservation = useCallback(async (data) => {
     const primary = data.items?.[0] || {}
     try {
       const saved = normalize(await reservationApi.createCustomer({
+        hotelId: Number(data.hotelId), roomId: Number(data.roomId ?? primary.roomTypeId),
+        rateId: Number(data.rateId ?? primary.rateId), checkIn: data.checkIn, checkOut: data.checkOut,
+        adults: Number(data.adults), children: Number(data.children || 0), quantity: Number(data.rooms ?? primary.quantity),
+        guestFirstName: data.guest?.firstName, guestLastName: data.guest?.lastName,
+        guestEmail: data.guest?.email, guestPhone: data.guest?.phone,
+        specialRequests: data.specialRequests || '', estimatedArrivalTime: data.estimatedArrivalTime || null,
+        offerId: data.appliedOfferId ? Number(data.appliedOfferId) : null,
+      }))
+      setReservations((current) => [saved, ...current.filter((item) => String(item.id) !== String(saved.id))])
+      return { reservation: saved }
+    } catch (error) { return requestError(error) }
+  }, [])
+
+  const addManagementReservation = useCallback(async (data) => {
+    const primary = data.items?.[0] || {}
+    try {
+      const saved = normalize(await reservationApi.createManagement({
         hotelId: Number(data.hotelId), roomId: Number(data.roomId ?? primary.roomTypeId),
         rateId: Number(data.rateId ?? primary.rateId), checkIn: data.checkIn, checkOut: data.checkOut,
         adults: Number(data.adults), children: Number(data.children || 0), quantity: Number(data.rooms ?? primary.quantity),
@@ -122,31 +151,32 @@ export function ReservationsProvider({ children }) {
     if (!room) return { error: 'Physical room was not found.' }
     try {
       const saved = normalize(await reservationApi.assignManagementRoom(reservationId, room.roomNumber))
-      saved.items = saved.items.map((item, index) => index ? item : { ...item, assignedPhysicalRoomIds: [physicalRoomId] })
       setReservations((current) => current.map((item) => String(item.id) === String(reservationId) ? saved : item))
       return { success: true }
-    } catch (error) { return requestError(error) }
+    } catch (error) { return { error: error.message || 'Room assignment failed.' } }
   }, [physicalRooms])
 
-  const unassignPhysicalRoom = useCallback(async (reservationId) => {
+  const unassignPhysicalRoom = useCallback(async (reservationId, physicalRoomId = null) => {
     try {
-      const saved = normalize(await reservationApi.assignManagementRoom(reservationId, null))
+      const room = physicalRoomId == null ? null : physicalRooms.find((entry) => String(entry.id) === String(physicalRoomId))
+      if (physicalRoomId != null && !room) return { error: 'Physical room was not found.' }
+      const saved = normalize(await reservationApi.assignManagementRoom(reservationId, room?.roomNumber || null, Boolean(room)))
       setReservations((current) => current.map((item) => String(item.id) === String(reservationId) ? saved : item))
       return { success: true }
-    } catch (error) { return requestError(error) }
-  }, [])
+    } catch (error) { return { error: error.message || 'Room unassignment failed.' } }
+  }, [physicalRooms])
 
   const updateReservation = useCallback(() => ({ error: 'Reservation modification is not available in the approved backend workflow.' }), [])
   const value = useMemo(() => ({
     reservations, reservationsLoading, reservationsError, refreshReservations, getReservationById,
-    addReservation, updateReservation, cancelReservation, deleteReservation, completeReservation, assignPhysicalRoom, unassignPhysicalRoom,
-    updateRoomCondition: updatePhysicalCondition, checkReservationAvailability: localAvailability, checkReservationAvailabilityRemote, getReservationQuote,
+    addReservation, addManagementReservation, updateReservation, cancelReservation, deleteReservation, completeReservation, assignPhysicalRoom, unassignPhysicalRoom,
+    updateRoomCondition: updatePhysicalCondition, checkReservationAvailability: localAvailability, checkReservationAvailabilityRemote, getReservationQuote, getManagementReservationQuote,
     getReservationsForHotel: (id) => getReservationsForHotel(reservations, id),
     getReservationsForRoomType: (id) => getReservationsForRoomType(reservations, id),
     getReservationsForPhysicalRoom: (id) => getReservationsForPhysicalRoom(reservations, id),
     getCurrentReservationForPhysicalRoom: (id, date) => getCurrentReservationForPhysicalRoom(reservations, id, date),
     getNextReservationForPhysicalRoom: (id, date) => getNextReservationForPhysicalRoom(reservations, id, date),
     getReservationAssignmentState, getReservationCode, canCustomerModifyReservation, canCustomerCancelReservation, canReviewReservation,
-  }), [reservations, reservationsLoading, reservationsError, refreshReservations, getReservationById, addReservation, updateReservation, cancelReservation, deleteReservation, completeReservation, assignPhysicalRoom, unassignPhysicalRoom, updatePhysicalCondition, localAvailability, checkReservationAvailabilityRemote, getReservationQuote])
+  }), [reservations, reservationsLoading, reservationsError, refreshReservations, getReservationById, addReservation, addManagementReservation, updateReservation, cancelReservation, deleteReservation, completeReservation, assignPhysicalRoom, unassignPhysicalRoom, updatePhysicalCondition, localAvailability, checkReservationAvailabilityRemote, getReservationQuote, getManagementReservationQuote])
   return <ReservationsContext.Provider value={value}>{children}</ReservationsContext.Provider>
 }

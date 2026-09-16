@@ -221,12 +221,13 @@ function BookingConfirmation() {
 
   if (confirmedReservation) {
     return (
-      <section className="review-empty-state" aria-labelledby="reservation-confirmed-title">
-        <span aria-hidden="true"><CircleCheck size={32} /></span>
-        <p>Reservation Confirmed</p>
+      <section className="reservation-success-card" aria-labelledby="reservation-confirmed-title">
+        <div className="reservation-success-icon" aria-hidden="true"><CircleCheck size={34} /></div>
+        <p className="reservation-success-kicker">Reservation Confirmed</p>
         <h1 id="reservation-confirmed-title">Thank you, {firstName}</h1>
-        <p>Your reservation code is <strong>{confirmedReservation.reservationCode}</strong>.</p>
-        <dl className="review-detail-grid review-detail-grid--stay">
+        <p className="reservation-success-message">Your stay is confirmed. Keep this reservation code for future reference.</p>
+        <div className="reservation-success-code"><span>Reservation code</span><strong>{confirmedReservation.reservationCode}</strong></div>
+        <dl className="review-detail-grid review-detail-grid--stay reservation-success-details">
           <div><dt>Hotel</dt><dd>{hotelName}</dd></div>
           <div><dt>Room</dt><dd>{roomName}</dd></div>
           <div><dt>Stay</dt><dd>{formatDisplayDate(checkIn)} – {formatDisplayDate(checkOut)}</dd></div>
@@ -234,7 +235,7 @@ function BookingConfirmation() {
           <div><dt>Rooms</dt><dd>{pluralize(roomCount, "Room")}</dd></div>
           <div><dt>Total</dt><dd>{formatRateAmount(confirmedReservation.totalAmount)}</dd></div>
         </dl>
-        <div className="review-success-actions"><Link to={`/my-reservations#${confirmedReservation.id}`}>View Reservation</Link><Link to="/my-reservations">My Reservations</Link>{hotel && <Link to={`/hotels/${hotel.id}`}>Back to Hotel</Link>}</div>
+        <div className="review-success-actions"><Link className="is-primary" to={`/my-reservations#${confirmedReservation.id}`}>View Reservation</Link><Link to="/my-reservations">My Reservations</Link>{hotel && <Link to={`/hotels/${hotel.id}`}>Back to Hotel</Link>}</div>
       </section>
     );
   }

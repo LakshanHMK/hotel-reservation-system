@@ -78,19 +78,21 @@ export function getReservedRoomQuantity(reservations, query) {
   const dates = enumerateStayDates(query.checkIn, query.checkOut)
   return dates.reduce((maximum, date) => Math.max(maximum, overlaps.filter((reservation) => reservation.checkIn <= date && reservation.checkOut > date).reduce((total, reservation) => total + getReservationItems(reservation).filter((item) => String(item.roomTypeId) === String(query.roomTypeId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0), 0)), 0)
 }
-export function getAvailabilityBreakdown({ reservations, physicalRooms, hotelId, roomTypeId, checkIn, checkOut, excludeReservationId }) {
+export function getAvailabilityBreakdown({ reservations, physicalRooms, hotelId, roomTypeId, checkIn, checkOut, excludeReservationId, inventoryCount }) {
   const allPhysical = physicalRooms.filter((room) => String(room.hotelId) === String(hotelId) && String(room.roomTypeId) === String(roomTypeId))
+  const totalInventory = inventoryCount == null ? allPhysical.length : Math.max(allPhysical.length, Number(inventoryCount) || 0)
+  const unnamed = totalInventory - allPhysical.length
   const query = { hotelId, roomTypeId, checkIn, checkOut, excludeReservationId }
   const overlapping = getOverlappingReservations(reservations, query)
   const daily = enumerateStayDates(checkIn, checkOut).map((date) => {
-    const operationalCapacity = getOperationalRoomCapacity(physicalRooms, hotelId, roomTypeId, date)
+    const operationalCapacity = getOperationalRoomCapacity(physicalRooms, hotelId, roomTypeId, date) + unnamed
     const reserved = overlapping.filter((reservation) => reservation.checkIn <= date && reservation.checkOut > date).reduce((total, reservation) => total + getReservationItems(reservation).filter((item) => String(item.roomTypeId) === String(roomTypeId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0), 0)
     return { date, reserved, operationalCapacity, available: operationalCapacity - reserved }
   })
-  const currentCapacity = getOperationalRoomCapacity(physicalRooms, hotelId, roomTypeId)
+  const currentCapacity = getOperationalRoomCapacity(physicalRooms, hotelId, roomTypeId) + unnamed
   const operationalCapacity = daily.length ? Math.min(...daily.map((item) => item.operationalCapacity)) : currentCapacity
   const availableQuantity = daily.length ? Math.min(...daily.map((item) => item.available)) : currentCapacity
-  return { physical: allPhysical.length, operationallyUnavailable: allPhysical.length - operationalCapacity, operationalCapacity, reservedQuantity: daily.length ? Math.max(...daily.map((item) => item.reserved)) : 0, availableQuantity, daily, dataInconsistency: availableQuantity < 0 }
+  return { physical: totalInventory, operationallyUnavailable: totalInventory - operationalCapacity, operationalCapacity, reservedQuantity: daily.length ? Math.max(...daily.map((item) => item.reserved)) : 0, availableQuantity, daily, dataInconsistency: availableQuantity < 0 }
 }
 export function getAvailableRoomQuantity(args) { return getAvailabilityBreakdown(args).availableQuantity }
 export function getAvailabilityStatus(quantity) { return quantity <= 0 ? 'SOLD OUT' : quantity === 1 ? 'LAST ROOM' : quantity <= 2 ? 'LOW AVAILABILITY' : 'AVAILABLE' }
@@ -105,11 +107,13 @@ export function getReservationAssignmentState(reservation) { const item = getPri
 export function hasPhysicalRoomAssignmentConflict(reservations, physicalRoomId, checkIn, checkOut, excludeReservationId) { return getReservationsForPhysicalRoom(reservations, physicalRoomId).some((reservation) => ACTIVE_RESERVATION_STATUSES.includes(reservation.status) && String(reservation.id) !== String(excludeReservationId ?? '') && doDateRangesOverlap(reservation.checkIn, reservation.checkOut, checkIn, checkOut)) }
 export function getCurrentReservationForPhysicalRoom(reservations, physicalRoomId, date = toDateKey()) { return getReservationsForPhysicalRoom(reservations, physicalRoomId).find((reservation) => ACTIVE_RESERVATION_STATUSES.includes(reservation.status) && reservation.checkIn <= date && reservation.checkOut > date) || null }
 export function getNextReservationForPhysicalRoom(reservations, physicalRoomId, date = toDateKey()) { return getReservationsForPhysicalRoom(reservations, physicalRoomId).filter((reservation) => ACTIVE_RESERVATION_STATUSES.includes(reservation.status) && reservation.checkIn > date).sort((a, b) => a.checkIn.localeCompare(b.checkIn))[0] || null }
-export function validateInventoryReduction({ reservations, physicalRooms, hotelId, roomTypeId, roomIds, fromDate, throughDate }) {
+export function validateInventoryReduction({ reservations, physicalRooms, hotelId, roomTypeId, roomIds, fromDate, throughDate, inventoryCount }) {
   const selected = new Set((roomIds || []).map(String)); const endExclusive = addDays(throughDate, 1); const dates = enumerateStayDates(fromDate, endExclusive)
   const assignmentConflicts = reservations.filter((reservation) => ACTIVE_RESERVATION_STATUSES.includes(reservation.status) && String(reservation.hotelId) === String(hotelId) && doDateRangesOverlap(reservation.checkIn, reservation.checkOut, fromDate, endExclusive) && getReservationItems(reservation).some((item) => String(item.roomTypeId) === String(roomTypeId) && (item.assignedPhysicalRoomIds || []).some((id) => selected.has(String(id)))))
   const relevantReservations = getOverlappingReservations(reservations, { hotelId, roomTypeId, checkIn: fromDate, checkOut: endExclusive })
-  const affectedDates = dates.filter((date) => { const remaining = physicalRooms.filter((room) => String(room.hotelId) === String(hotelId) && String(room.roomTypeId) === String(roomTypeId) && !selected.has(String(room.id)) && getPhysicalRoomOperationalState(room, date) === 'AVAILABLE').length; const demand = relevantReservations.filter((reservation) => reservation.checkIn <= date && reservation.checkOut > date).reduce((total, reservation) => total + getReservationItems(reservation).filter((item) => String(item.roomTypeId) === String(roomTypeId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0), 0); return remaining < demand })
+  const configured = physicalRooms.filter((room) => String(room.hotelId) === String(hotelId) && String(room.roomTypeId) === String(roomTypeId)).length
+  const unnamed = inventoryCount == null ? 0 : Math.max(0, Number(inventoryCount) - configured)
+  const affectedDates = dates.filter((date) => { const remaining = unnamed + physicalRooms.filter((room) => String(room.hotelId) === String(hotelId) && String(room.roomTypeId) === String(roomTypeId) && !selected.has(String(room.id)) && getPhysicalRoomOperationalState(room, date) === 'AVAILABLE').length; const demand = relevantReservations.filter((reservation) => reservation.checkIn <= date && reservation.checkOut > date).reduce((total, reservation) => total + getReservationItems(reservation).filter((item) => String(item.roomTypeId) === String(roomTypeId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0), 0); return remaining < demand })
   return { valid: assignmentConflicts.length === 0 && affectedDates.length === 0, assignmentConflicts, affectedDates }
 }
 export const validatePhysicalRoomOperationalChange = validateInventoryReduction

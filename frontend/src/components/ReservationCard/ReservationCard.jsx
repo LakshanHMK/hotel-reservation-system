@@ -42,7 +42,9 @@ function ReservationCard({ canReview = false, customerId, hotel, onCancel, onDel
   const statusLabel = statusLabels[reservation.status] || reservation.status;
   const canModify = canCustomerModifyReservation(reservation, customerId);
   const canCancel = canCustomerCancelReservation(reservation, customerId);
-  const canDelete = String(reservation.customerId) === String(customerId) && reservation.status === "CANCELLED";
+  // This list is returned by the authenticated customer endpoint. Ownership is
+  // enforced again by the DELETE service, so eligibility here is status-only.
+  const canDelete = reservation.status === "CANCELLED";
 
   return (
     <article className="reservation-card">
