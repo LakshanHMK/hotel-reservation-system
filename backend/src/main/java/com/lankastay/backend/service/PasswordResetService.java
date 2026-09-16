@@ -13,6 +13,7 @@ import com.lankastay.backend.repository.StaffUserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,19 +39,21 @@ public class PasswordResetService {
     private final PasswordEncoder encoder;
     private final PasswordPolicy passwordPolicy;
     private final SecurityAuditService audit;
+    private final Environment environment;
 
     // Development helper store for local QA testing without external SMTP credentials
     private static final ConcurrentHashMap<String, String> devLastResetLinks = new ConcurrentHashMap<>();
 
     public PasswordResetService(StaffUserRepository staffRepository, CustomerUserRepository customerRepository,
                                 PasswordResetTokenRepository tokenRepository, PasswordEncoder encoder,
-                                PasswordPolicy passwordPolicy, SecurityAuditService audit) {
+                                PasswordPolicy passwordPolicy, SecurityAuditService audit, Environment environment) {
         this.staffRepository = staffRepository;
         this.customerRepository = customerRepository;
         this.tokenRepository = tokenRepository;
         this.encoder = encoder;
         this.passwordPolicy = passwordPolicy;
         this.audit = audit;
+        this.environment = environment;
     }
 
     @Transactional
@@ -81,9 +84,7 @@ public class PasswordResetService {
             token.setStaffUserId(staff.getId());
             audit.record(staff.getId(), staff.getId(), SecurityEventType.PASSWORD_RESET_REQUESTED, ipAddress, "SUCCESS");
             
-            String resetUrl = "http://localhost:5174/staff/reset-password?token=" + rawToken;
-            devLastResetLinks.put("last", resetUrl);
-            devLastResetLinks.put(email, resetUrl);
+            rememberDevelopmentLink(email, "http://localhost:5174/staff/reset-password?token=" + rawToken);
             logger.debug("Generated staff password reset token for account.");
         } else if (customerOpt.isPresent()) {
             CustomerUser customer = customerOpt.get();
@@ -91,9 +92,7 @@ public class PasswordResetService {
             token.setCustomerUserId(customer.getId());
             audit.record(customer.getId(), customer.getId(), SecurityEventType.PASSWORD_RESET_REQUESTED, ipAddress, "SUCCESS");
 
-            String resetUrl = "http://localhost:5174/reset-password?token=" + rawToken;
-            devLastResetLinks.put("last", resetUrl);
-            devLastResetLinks.put(email, resetUrl);
+            rememberDevelopmentLink(email, "http://localhost:5174/reset-password?token=" + rawToken);
             logger.debug("Generated customer password reset token for account.");
         }
 
@@ -163,6 +162,16 @@ public class PasswordResetService {
             return devLastResetLinks.get(CustomerUser.normalizeEmail(email));
         }
         return devLastResetLinks.get("last");
+    }
+
+    private void rememberDevelopmentLink(String email, String resetUrl) {
+        for (String profile : environment.getActiveProfiles()) {
+            if ("dev".equals(profile)) {
+                devLastResetLinks.put("last", resetUrl);
+                devLastResetLinks.put(email, resetUrl);
+                return;
+            }
+        }
     }
 
     private String hashToken(String rawToken) {

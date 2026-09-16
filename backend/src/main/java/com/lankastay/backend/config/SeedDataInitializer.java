@@ -186,46 +186,36 @@ public class SeedDataInitializer implements CommandLineRunner {
 
             Integer rateCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_rates", Integer.class);
             if (rateCount == null || rateCount == 0) {
-                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, base_nightly_rate, weekend_nightly_rate, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
-                        "VALUES (1, 301, 101, 'Standard Flexible Rate', 'FLEX-BB', 38500.0, 42000.0, 'BED_AND_BREAKFAST', 'FLEXIBLE_24H', 0, 0.0, 'ACTIVE', ?, ?)", now, now);
+                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, rate_type, pricing_method, base_nightly_rate, weekend_nightly_rate, minimum_stay, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
+                        "VALUES (1, 301, 101, 'Standard Flexible Rate', 'FLEX-BB', 'BASE', 'SET_PRICE', 38500.0, 42000.0, 1, 'BED_AND_BREAKFAST', 'FLEXIBLE_24H', 0, 0.0, 'ACTIVE', ?, ?)", now, now);
 
-                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, base_nightly_rate, weekend_nightly_rate, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
-                        "VALUES (2, 301, 102, 'Non-Refundable Saver', 'NR-RO', 46800.0, 50000.0, 'ROOM_ONLY', 'NON_REFUNDABLE', 1, 100.0, 'ACTIVE', ?, ?)", now, now);
+                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, rate_type, pricing_method, base_nightly_rate, weekend_nightly_rate, minimum_stay, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
+                        "VALUES (2, 301, 102, 'Non-Refundable Saver', 'NR-RO', 'BASE', 'SET_PRICE', 46800.0, 50000.0, 1, 'ROOM_ONLY', 'NON_REFUNDABLE', 1, 100.0, 'ACTIVE', ?, ?)", now, now);
 
-                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, base_nightly_rate, weekend_nightly_rate, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
-                        "VALUES (3, 302, 103, 'Luxury Half Board Escape', 'LUX-HB', 89000.0, 95000.0, 'HALF_BOARD', 'FLEXIBLE_7D', 1, 50.0, 'ACTIVE', ?, ?)", now, now);
+                jdbcTemplate.update("INSERT INTO room_rates (id, hotel_id, room_id, rate_plan_name, rate_plan_code, rate_type, pricing_method, base_nightly_rate, weekend_nightly_rate, minimum_stay, meal_plan, cancellation_policy, deposit_required, deposit_percentage, status, created_at, updated_at) " +
+                        "VALUES (3, 302, 103, 'Luxury Half Board Escape', 'LUX-HB', 'BASE', 'SET_PRICE', 89000.0, 95000.0, 1, 'HALF_BOARD', 'FLEXIBLE_7D', 1, 50.0, 'ACTIVE', ?, ?)", now, now);
 
                 logger.info("Seeded canonical RoomRate records into MySQL database.");
             }
 
-            Integer discountCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM discounts", Integer.class);
-            if (discountCount == null || discountCount == 0) {
-                jdbcTemplate.update("INSERT INTO discounts (id, hotel_id, code, title, description, discount_type, discount_value, minimum_nights, valid_from, valid_to, status, created_at, updated_at) " +
-                        "VALUES (1, 301, 'SUMMER20', 'Summer Getaway 20%', 'Get 20% off for stays with 2+ nights', 'PERCENTAGE', 20.0, 2, '2026-06-01', '2026-09-30', 'ACTIVE', ?, ?)", now, now);
+            Integer offerCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM offers", Integer.class);
+            if (offerCount == null || offerCount == 0) {
+                jdbcTemplate.update("INSERT INTO offers (id, slug, title, short_description, full_description, discount_type, discount_value, fixed_discount_scope, stay_start_date, stay_end_date, booking_start_date, booking_end_date, minimum_stay, applicable_days, status, featured, display_order, image, terms_json, created_at, updated_at) " +
+                        "VALUES (1, 'early-bird-escape', 'Early Bird Escape', 'Plan ahead and enjoy special savings on selected LankaStay stays.', 'Book your stay in advance and enjoy a special saving at selected LankaStay Hotels & Resorts across Sri Lanka.', 'PERCENTAGE', 15.00, 'PER_STAY', '2026-08-01', '2026-12-31', '2026-01-01', '2026-12-31', 2, 'MON,TUE,WED,THU,FRI,SAT,SUN', 'ACTIVE', 1, 1, '/assets/images/home/early-bird-offer.png', '[\"Advance reservation is required.\",\"Minimum stay requirement applies.\",\"Offer is available only at selected LankaStay properties.\"]', ?, ?)", now, now);
 
-                jdbcTemplate.update("INSERT INTO discounts (id, hotel_id, code, title, description, discount_type, discount_value, minimum_nights, valid_from, valid_to, status, created_at, updated_at) " +
-                        "VALUES (2, 302, 'EARLYBIRD', 'Early Bird Special', 'Save 15% on early bookings', 'PERCENTAGE', 15.0, 1, '2026-01-01', '2026-12-31', 'ACTIVE', ?, ?)", now, now);
+                jdbcTemplate.update("INSERT INTO offer_hotels (offer_id, hotel_id) VALUES (1, 301), (1, 302)");
 
-                logger.info("Seeded canonical Discount records into MySQL database.");
-            }
+                jdbcTemplate.update("INSERT INTO offers (id, slug, title, short_description, full_description, discount_type, discount_value, fixed_discount_scope, stay_start_date, stay_end_date, booking_start_date, booking_end_date, minimum_stay, applicable_days, status, featured, display_order, image, terms_json, created_at, updated_at) " +
+                        "VALUES (2, 'romantic-coastal-getaway', 'Romantic Coastal Getaway', 'A relaxing coastal escape created for memorable stays together.', 'Enjoy a special coastal getaway at selected LankaStay beach and seaside properties.', 'PERCENTAGE', 20.00, 'PER_STAY', '2026-08-15', '2026-12-31', '2026-01-01', '2026-12-31', 2, 'MON,TUE,WED,THU,FRI,SAT,SUN', 'ACTIVE', 1, 2, '/assets/images/home/romantic-getaway.png', '[\"Valid only at participating coastal properties.\",\"Minimum stay requirement applies.\"]', ?, ?)", now, now);
 
-            Integer resCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM reservations", Integer.class);
-            if (resCount == null || resCount == 0) {
-                java.time.LocalDate today = java.time.LocalDate.now();
+                jdbcTemplate.update("INSERT INTO offer_hotels (offer_id, hotel_id) VALUES (2, 301), (2, 302)");
 
-                jdbcTemplate.update("INSERT INTO reservations (id, reservation_code, hotel_id, customer_id, guest_name, guest_email, guest_phone, check_in, check_out, number_of_nights, adults, children, total_amount, tax_amount, net_amount, payment_status, reservation_status, assignment_state, assigned_room_number, special_requests, estimated_arrival_time, created_at, updated_at) " +
-                        "VALUES (1, 'LK-2026-8941', 301, 1, 'Kasun Perera', 'kasun.p@gmail.com', '+94 77 123 4567', ?, ?, 2, 2, 0, 77000.0, 7000.0, 70000.0, 'PAID', 'CONFIRMED', 'ASSIGNED', '204', 'High floor requested.', '14:30', ?, ?)", today, today.plusDays(2), now, now);
+                jdbcTemplate.update("INSERT INTO offers (id, slug, title, short_description, full_description, discount_type, discount_value, fixed_discount_scope, stay_start_date, stay_end_date, booking_start_date, booking_end_date, minimum_stay, applicable_days, status, featured, display_order, image, terms_json, created_at, updated_at) " +
+                        "VALUES (3, 'family-holiday', 'Family Holiday', 'Enjoy more memorable family time with selected LankaStay stays.', 'Discover family-friendly LankaStay properties with a special saving for selected stays.', 'PERCENTAGE', 12.00, 'PER_STAY', '2026-08-01', '2027-01-10', '2026-01-01', '2027-01-10', 2, 'MON,TUE,WED,THU,FRI,SAT,SUN', 'ACTIVE', 1, 3, '/assets/images/home/family-holiday.png', '[\"Available only at selected family-friendly properties.\",\"Minimum stay requirement applies.\"]', ?, ?)", now, now);
 
-                jdbcTemplate.update("INSERT INTO reservations (id, reservation_code, hotel_id, customer_id, guest_name, guest_email, guest_phone, check_in, check_out, number_of_nights, adults, children, total_amount, tax_amount, net_amount, payment_status, reservation_status, assignment_state, assigned_room_number, special_requests, estimated_arrival_time, created_at, updated_at) " +
-                        "VALUES (2, 'LK-2026-8942', 301, 2, 'Nimali Fernando', 'nimali.f@gmail.com', '+94 71 987 6543', ?, ?, 3, 2, 1, 156000.0, 14000.0, 142000.0, 'PARTIALLY_PAID', 'CONFIRMED', 'UNASSIGNED', NULL, 'Honeymoon arrangement.', '15:00', ?, ?)", today.plusDays(1), today.plusDays(4), now, now);
+                jdbcTemplate.update("INSERT INTO offer_hotels (offer_id, hotel_id) VALUES (3, 301), (3, 302)");
 
-                jdbcTemplate.update("INSERT INTO reservation_items (id, reservation_id, room_id, room_rate_id, quantity, nightly_rate, total_price) " +
-                        "VALUES (1, 1, 101, 1, 1, 38500.0, 77000.0)");
-
-                jdbcTemplate.update("INSERT INTO reservation_items (id, reservation_id, room_id, room_rate_id, quantity, nightly_rate, total_price) " +
-                        "VALUES (2, 2, 102, 2, 1, 52000.0, 156000.0)");
-
-                logger.info("Seeded canonical Reservation records into MySQL database.");
+                logger.info("Seeded canonical Offer records into MySQL database.");
             }
         } catch (Exception ex) {
             logger.warn("Could not seed rooms/rates/reservations: {}", ex.getMessage());

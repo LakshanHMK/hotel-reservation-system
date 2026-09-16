@@ -2,6 +2,7 @@ package com.lankastay.backend.service;
 
 import com.lankastay.backend.dto.auth.ChangeInitialPasswordRequest;
 import com.lankastay.backend.dto.auth.ChangePasswordRequest;
+import com.lankastay.backend.dto.auth.SimpleForgotPasswordRequest;
 import com.lankastay.backend.dto.auth.StaffLoginRequest;
 import com.lankastay.backend.entity.*;
 import com.lankastay.backend.exception.ApiException;
@@ -58,6 +59,10 @@ public class AuthenticationService {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", "Too many login attempts. Please try again later.");
         }
         String email = StaffUser.normalizeEmail(request.email());
+        if (!StaffUser.isValidEmail(email)) {
+            audit.record(null, null, SecurityEventType.LOGIN_FAILURE, ip, "INVALID_CREDENTIALS");
+            throw invalidCredentials();
+        }
         StaffUser user = users.findByEmail(email).orElse(null);
         if (user != null && user.getLockedUntil() != null && !user.getLockedUntil().isAfter(Instant.now())) {
             user.setLockedUntil(null);
@@ -100,7 +105,7 @@ public class AuthenticationService {
     }
 
     private ApiException invalidCredentials() {
-        return new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized", "Invalid email or password");
+        return new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized", "Invalid email or password.");
     }
 
     @Transactional
@@ -108,6 +113,9 @@ public class AuthenticationService {
         StaffUser user = requireActive(userId);
         if (!user.isMustChangePassword()) {
             throw new ApiException(HttpStatus.CONFLICT, "Conflict", "Initial password change is not required.");
+        }
+        if (!encoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Bad Request", "Current password is incorrect.");
         }
         validateNewPassword(request.newPassword(), request.confirmNewPassword(), user);
         user.setPasswordHash(encoder.encode(request.newPassword()));
@@ -150,5 +158,32 @@ public class AuthenticationService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized", "Authentication is required.");
         }
         return user;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean forgotPasswordEmailExists(String email) {
+        return users.existsByEmail(StaffUser.normalizeEmail(email));
+    }
+
+    @Transactional
+    public void resetForgottenPassword(SimpleForgotPasswordRequest request, String ip) {
+        String email = StaffUser.normalizeEmail(request.email());
+        StaffUser user = users.findByEmail(email)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Not Found", "No account found with this email."));
+
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password and confirmation do not match.");
+        }
+        passwordPolicy.validate(request.newPassword());
+        if (encoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password must be different from current password.");
+        }
+
+        user.setPasswordHash(encoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        users.save(user);
+        audit.record(user.getId(), user.getId(), SecurityEventType.PASSWORD_RESET_COMPLETED, ip, "SUCCESS");
     }
 }
