@@ -1,0 +1,40 @@
+package com.lankastay.backend.dto.review;
+
+import com.lankastay.backend.entity.ReviewStatus;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+public record ReviewResponse(
+        Long id,
+        UUID customerId,
+        String customerName,
+        Long hotelId,
+        String hotelName,
+        Long reservationId,
+        String reservationCode,
+        String stayCheckIn,
+        String stayCheckOut,
+        String roomName,
+        int overallRating,
+        Integer cleanlinessRating,
+        Integer comfortRating,
+        Integer staffServiceRating,
+        Integer facilitiesRating,
+        Integer locationRating,
+        Integer valueForMoneyRating,
+        String title,
+        String comment,
+        List<String> photos,
+        ReviewStatus status,
+        boolean verifiedStay,
+        Instant customerUpdatedAt,
+        Instant deletedAt,
+        String moderationReason,
+        String moderationNote,
+        Instant hiddenAt,
+        UUID hiddenByStaffId,
+        ManagementResponseDTO managementResponse,
+        Instant createdAt,
+        Instant updatedAt
+) {}
