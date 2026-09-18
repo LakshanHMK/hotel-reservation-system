@@ -2,15 +2,13 @@ name: LankaStay Frontend CI
 
 on:
   push:
-    branches: [ main, java-only ]
+    branches: [ main ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
+
   pull_request:
-    branches: [ main, java-only ]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
+    branches: [ main ]
 
 jobs:
   build:
