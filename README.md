@@ -75,43 +75,46 @@ The platform enforces a five-tier access control matrix:
 
 ## 5. System Architecture
 
-LankaStay follows a decoupled client-server architecture where a single-page React client communicates with stateless-token / secure-session REST API controllers.
+LankaStay uses a layered client-server architecture. The React/Vite single-page application communicates with a Spring Boot REST backend over HTTP/JSON using session-based authentication. Spring Security provides CSRF protection and role-based authorization; customer controllers also validate customer sessions. Services implement business rules, Spring Data JPA and Spring JdbcTemplate provide persistence, and MySQL stores application data with Flyway-managed schema migrations.
 
-```
-+-----------------------------------------------------------------------------------+
-|                                 CLIENT TIER                                       |
-|  React 19 (Vite) Single-Page Application (Port 5174)                              |
-|  - In-Memory Contexts: CustomerContext, StaffContext, ReservationsContext         |
-|  - Route Guards: CustomerRoute (authenticated), StaffRoute (role-scoped)          |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                HTTP / JSON (CORS)
-                       Cookie: LANKASTAY_SESSION (HttpOnly, SameSite=Lax)
-                       Header: X-XSRF-TOKEN
-                                         v
-+-----------------------------------------------------------------------------------+
-|                           SPRING BOOT BACKEND (Port 8080)                         |
-|  [Security Filter Chain]                                                          |
-|  - CsrfFilter (CookieCsrfTokenRepository)                                         |
-|  - CorsFilter (Explicitly Allowed Origins)                                        |
-|  - SecurityContextPersistenceFilter & AccountStateFilter                          |
-|                                                                                   |
-|  [Controller Layer (25 Controllers)]                                              |
-|  Public Discovery | Customer Auth & Booking | Staff Operations | Management Admin  |
-|                                         |                                         |
-|  [Service & Business Logic Tier (23 Services)]                                    |
-|  Pessimistic Room Locking | Authoritative Pricing | Image Validation | Reset Flow |
-|                                         |                                         |
-|  [Persistence Tier (18 Repositories)]                                             |
-|  Spring Data JPA (Parameterized JPQL/SQL) & Spring JdbcTemplate                   |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                  JDBC / TCP (3306)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                              DATABASE TIER                                        |
-|  MySQL 8+ Database: lankastay_db (Flyway Migrations V1__ to V19__)                |
-+-----------------------------------------------------------------------------------+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 440}}}%%
+flowchart TB
+    subgraph clientTier["Client Tier"]
+        spa["React 19 + Vite SPA<br/>Development port: 5174<br/><br/>Context state: CustomerContext,<br/>StaffContext, ReservationsContext<br/><br/>Route guards: CustomerProtectedRoute<br/>and ManagementProtectedRoute"]
+    end
+
+    subgraph communicationTier["Communication / Security Boundary"]
+        transport["HTTP / JSON REST + credentialed CORS<br/>Session cookie: LANKASTAY_SESSION<br/>HttpOnly / SameSite=Lax<br/>CSRF header: X-XSRF-TOKEN"]
+    end
+
+    subgraph applicationTier["Spring Boot Application Tier - Development port: 8080"]
+        direction TB
+        subgraph securityLayer["Spring Security Layer"]
+            security["Spring Security filter chain<br/>CsrfFilter + CookieCsrfTokenRepository<br/>CorsFilter + allowed-origin configuration<br/>Session SecurityContext persistence:<br/>HttpSessionSecurityContextRepository<br/>AccountStateFilter"]
+        end
+
+        subgraph controllerLayer["Controller Layer"]
+            controllers["Public Discovery<br/>Customer Auth and Booking<br/>Staff Operations<br/>Management Admin<br/>Customer-session validation"]
+        end
+
+        subgraph serviceLayer["Service / Business Logic Layer"]
+            services["Reservation Management + Room Availability<br/>Pessimistic Room Locking<br/>Authoritative Pricing<br/>Password Reset + Image Validation<br/>Verified-Stay Reviews"]
+        end
+
+        subgraph persistenceLayer["Persistence Layer - 18 repositories"]
+            persistence["Spring Data JPA - parameterized JPQL<br/>Spring JdbcTemplate - parameterized SQL"]
+        end
+
+        security --> controllers --> services --> persistence
+    end
+
+    subgraph databaseTier["Database Tier"]
+        mysql[("MySQL 8+<br/>lankastay_db<br/>Flyway V1-V19<br/>B18 baseline for fresh installations")]
+    end
+
+    spa --> transport --> security
+    persistence -->|JDBC / TCP 3306| mysql
 ```
 
 ---
