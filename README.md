@@ -1,4 +1,10 @@
 # LankaStay Hotels & Resorts – Multi-Property Hotel Reservation System
+[![Backend CI](https://github.com/LakshanHMK/hotel-reservation-system/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/LakshanHMK/hotel-reservation-system/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/LakshanHMK/hotel-reservation-system/actions/workflows/frontend-ci.yml/badge.svg?branch=main)](https://github.com/LakshanHMK/hotel-reservation-system/actions/workflows/frontend-ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/LakshanHMK/hotel-reservation-system?display_name=tag)](https://github.com/LakshanHMK/hotel-reservation-system/releases/latest)
+[![CodeQL](https://img.shields.io/badge/CodeQL-enabled-success)](https://github.com/LakshanHMK/hotel-reservation-system/security/code-scanning)
+[![Secret Protection](https://img.shields.io/badge/Secret%20Protection-enabled-success)](https://github.com/LakshanHMK/hotel-reservation-system/security)
+
 
 > **Academic Project Declaration:**  
 > **Course Module:** SE2030 – Software Engineering (Year 2, Semester 1)  
