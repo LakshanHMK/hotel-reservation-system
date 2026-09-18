@@ -20,6 +20,15 @@ public class WebConfig implements WebMvcConfigurer {
         String uploadPathUri = uploadPath.toUri().toString();
 
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations(uploadPathUri.endsWith("/") ? uploadPathUri : uploadPathUri + "/");
+                .addResourceLocations(uploadPathUri.endsWith("/") ? uploadPathUri : uploadPathUri + "/")
+                .resourceChain(true)
+                .addResolver(new org.springframework.web.servlet.resource.PathResourceResolver() {
+                    @Override
+                    protected org.springframework.core.io.Resource getResource(String path, org.springframework.core.io.Resource location)
+                            throws java.io.IOException {
+                        if (!path.matches("(?i)[a-z0-9_/-]+\\.(jpg|jpeg|png|webp)")) return null;
+                        return super.getResource(path, location);
+                    }
+                });
     }
 }

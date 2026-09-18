@@ -20,10 +20,13 @@ public class CustomerAuthenticationController {
 
     private final CustomerAuthenticationService customerAuthService;
     private final SecurityAuditService audit;
+    private final com.lankastay.backend.service.CustomerSessionService customerSessions;
 
-    public CustomerAuthenticationController(CustomerAuthenticationService customerAuthService, SecurityAuditService audit) {
+    public CustomerAuthenticationController(CustomerAuthenticationService customerAuthService, SecurityAuditService audit,
+            com.lankastay.backend.service.CustomerSessionService customerSessions) {
         this.customerAuthService = customerAuthService;
         this.audit = audit;
+        this.customerSessions = customerSessions;
     }
 
     @PostMapping("/register")
@@ -49,34 +52,14 @@ public class CustomerAuthenticationController {
             // Already new or container does not support changeSessionId
         }
         session.setAttribute(com.lankastay.backend.service.CustomerSessionService.CUSTOMER_SESSION_KEY, customer.getId().toString());
+        session.setAttribute(com.lankastay.backend.service.CustomerSessionService.VERSION_SESSION_KEY, customer.getSessionVersion());
 
         return ResponseEntity.ok(CustomerResponse.from(customer));
     }
 
-    @PostMapping("/forgot-password/check-email")
-    public ResponseEntity<Map<String, Boolean>> checkForgotPasswordEmail(
-            @Valid @RequestBody ForgotPasswordRequest request
-    ) {
-        return ResponseEntity.ok(Map.of("exists", customerAuthService.forgotPasswordEmailExists(request.email())));
-    }
-
-    @PostMapping("/forgot-password/change-password")
-    public ResponseEntity<MessageResponse> changeForgottenPassword(
-            @Valid @RequestBody SimpleForgotPasswordRequest request,
-            HttpServletRequest servletRequest
-    ) {
-        customerAuthService.resetForgottenPassword(request, clientIp(servletRequest));
-        return ResponseEntity.ok(new MessageResponse("Password changed successfully."));
-    }
-
     @GetMapping("/me")
     public ResponseEntity<CustomerResponse> me(HttpServletRequest servletRequest) {
-        HttpSession session = servletRequest.getSession(false);
-        if (session == null || session.getAttribute(com.lankastay.backend.service.CustomerSessionService.CUSTOMER_SESSION_KEY) == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        String idStr = (String) session.getAttribute(com.lankastay.backend.service.CustomerSessionService.CUSTOMER_SESSION_KEY);
-        CustomerUser customer = customerAuthService.requireActive(java.util.UUID.fromString(idStr));
+        CustomerUser customer = customerSessions.requireCustomer(servletRequest);
         return ResponseEntity.ok(CustomerResponse.from(customer));
     }
 

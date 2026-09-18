@@ -4,82 +4,70 @@ import com.lankastay.backend.dto.media.MediaUploadResponse;
 import com.lankastay.backend.exception.BusinessRuleException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.Set;
-import java.util.UUID;
+import javax.imageio.*;
+import javax.imageio.stream.ImageInputStream;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
 
 @Service
 public class MediaStorageService {
-
-    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
-            "image/jpeg",
-            "image/png",
-            "image/webp"
-    );
-
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024;
+    private static final int MAX_DIMENSION = 8192;
+    private static final long MAX_PIXELS = 20_000_000;
     private final Path uploadLocation;
 
-    public MediaStorageService(@Value("${file.upload-dir:uploads/destinations}") String uploadDir) {
-        this.uploadLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(this.uploadLocation);
-        } catch (IOException e) {
-            throw new RuntimeException("Could not initialize storage directory: " + uploadDir, e);
-        }
+    public MediaStorageService(@Value("${file.upload-dir:uploads}") String uploadDir) {
+        uploadLocation = Paths.get(uploadDir).toAbsolutePath().normalize().resolve("destinations");
+        try { Files.createDirectories(uploadLocation); }
+        catch (IOException e) { throw new IllegalStateException("Could not initialize image storage", e); }
     }
 
     public MediaUploadResponse storeFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessRuleException("Please upload a valid, non-empty image file.");
-        }
-
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BusinessRuleException("File size exceeds maximum limit of 5 MB.");
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_MIME_TYPES.contains(contentType.toLowerCase())) {
-            throw new BusinessRuleException("Unsupported file format. Only JPG, PNG, and WebP images are allowed.");
-        }
-
-        String originalFilename = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "image.png");
-
-        if (originalFilename.contains("..") || originalFilename.contains("/") || originalFilename.contains("\\")) {
-            throw new BusinessRuleException("Invalid filename path traversal attempt detected.");
-        }
-
-        String extension = "";
-        int dotIndex = originalFilename.lastIndexOf('.');
-        if (dotIndex > 0) {
-            extension = originalFilename.substring(dotIndex).toLowerCase();
-        } else {
-            if ("image/jpeg".equals(contentType)) extension = ".jpg";
-            else if ("image/png".equals(contentType)) extension = ".png";
-            else if ("image/webp".equals(contentType)) extension = ".webp";
-        }
-
-        String generatedFilename = "dest_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
-
-        try {
-            Path targetLocation = this.uploadLocation.resolve(generatedFilename);
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        if (file == null || file.isEmpty()) throw invalid("Please upload a non-empty image.");
+        if (file.getSize() > MAX_FILE_SIZE) throw invalid("File size exceeds maximum limit of 5 MB.");
+        String name = file.getOriginalFilename();
+        // Reject traversal and multiple extensions BEFORE path normalization.
+        if (name == null || !name.matches("[^./\\\\\u0000-\u001f]+\\.(?i:jpg|jpeg|png|webp)"))
+            throw invalid("Invalid image filename. Only single-extension JPG, PNG, and WebP names are allowed.");
+        try (InputStream input = file.getInputStream()) {
+            byte[] bytes = input.readNBytes((int) MAX_FILE_SIZE + 1);
+            if (bytes.length > MAX_FILE_SIZE) throw invalid("File size exceeds maximum limit of 5 MB.");
+            try (ImageInputStream stream = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+                Iterator<ImageReader> readers = ImageIO.getImageReaders(stream);
+                if (!readers.hasNext()) throw invalid("Image cannot be decoded.");
+                ImageReader reader = readers.next();
+                try {
+                    String format = reader.getFormatName().toLowerCase(Locale.ROOT);
+                    if (!Set.of("jpeg", "jpg", "png", "webp").contains(format)) throw invalid("Unsupported image format.");
+                    String extension = name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+                    if (!(format.equals(extension) || Set.of("jpg", "jpeg").contains(format) && Set.of("jpg", "jpeg").contains(extension)))
+                        throw invalid("Image extension does not match verified content.");
+                    reader.setInput(stream, true, true);
+                    int width = reader.getWidth(0), height = reader.getHeight(0);
+                    if (width < 1 || height < 1 || width > MAX_DIMENSION || height > MAX_DIMENSION || (long) width * height > MAX_PIXELS)
+                        throw invalid("Image dimensions exceed safe limits.");
+                    BufferedImage image = reader.read(0);
+                    if (image == null) throw invalid("Image cannot be decoded.");
+                    // Re-encode pixels to discard metadata, trailing scripts, and polyglot payloads.
+                    // WebP is decoded by the trusted plugin and stored as a sanitized PNG.
+                    String storedFormat = Set.of("jpeg", "jpg").contains(format) ? "jpg" : "png";
+                    String generated = "dest_" + UUID.randomUUID() + "." + storedFormat;
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    if (!ImageIO.write(image, storedFormat, output)) throw invalid("Image cannot be safely encoded.");
+                    if (output.size() > MAX_FILE_SIZE) throw invalid("Sanitized image exceeds maximum limit of 5 MB.");
+                    Path target = uploadLocation.resolve(generated).normalize();
+                    if (!target.getParent().equals(uploadLocation)) throw invalid("Invalid storage path.");
+                    Files.write(target, output.toByteArray(), StandardOpenOption.CREATE_NEW);
+                    return new MediaUploadResponse("/uploads/destinations/" + generated, generated, (long) output.size(),
+                            storedFormat.equals("jpg") ? "image/jpeg" : "image/png");
+                } finally { reader.dispose(); }
             }
-
-            String publicUrl = "/uploads/destinations/" + generatedFilename;
-            return new MediaUploadResponse(publicUrl, generatedFilename, file.getSize(), contentType);
-        } catch (IOException ex) {
-            throw new BusinessRuleException("Failed to store uploaded file on server: " + ex.getMessage());
+        } catch (IOException | IllegalArgumentException e) {
+            throw invalid("Image cannot be decoded or stored safely.");
         }
     }
+    private BusinessRuleException invalid(String message) { return new BusinessRuleException(message); }
 }

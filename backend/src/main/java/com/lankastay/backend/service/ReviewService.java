@@ -65,7 +65,9 @@ public class ReviewService {
             throw new ConflictException("Only completed LankaStay reservations can be reviewed.");
         }
 
-        if (reservation.getReviewSubmittedAt() != null || reviewRepository.existsByReservationId(reservation.getId())) {
+        // The review row is the source of truth. review_submitted_at is a
+        // historical marker and must not block re-creation after a hard delete.
+        if (reviewRepository.existsByReservationId(reservation.getId())) {
             throw new ConflictException("You have already reviewed this stay.");
         }
 
@@ -143,8 +145,17 @@ public class ReviewService {
         }
 
         Long hotelId = review.getHotel().getId();
+        Reservation reservation = review.getReservation();
         reviewRepository.delete(review);
         reviewRepository.flush();
+
+        // A deleted customer review no longer blocks a fresh review for the
+        // same completed reservation. Keep the reservation marker consistent
+        // with the review table so the eligibility API cannot report stale data.
+        if (reservation != null) {
+            reservation.setReviewSubmittedAt(null);
+            reservationRepository.save(reservation);
+        }
 
         syncHotelRating(hotelId);
 
@@ -167,7 +178,10 @@ public class ReviewService {
         for (Reservation res : reservations) {
             boolean isCompleted = isCompletedStay(res);
             Optional<Review> existingReview = reviewRepository.findByReservationId(res.getId());
-            boolean alreadyReviewed = existingReview.isPresent() || res.getReviewSubmittedAt() != null;
+            // A hard-deleted review leaves no row and makes the stay eligible
+            // again. Do not let the historical reservation marker become stale
+            // eligibility state.
+            boolean alreadyReviewed = existingReview.isPresent();
             Long reviewId = existingReview.map(Review::getId).orElse(null);
 
             Hotel hotel = hotelRepository.findById(res.getHotelId()).orElse(null);

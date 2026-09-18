@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 
@@ -17,10 +18,15 @@ public class SeedDataInitializer implements CommandLineRunner {
 
     private final DestinationRepository destinationRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final boolean seedDemoReviewReservation;
 
-    public SeedDataInitializer(DestinationRepository destinationRepository, JdbcTemplate jdbcTemplate) {
+    public SeedDataInitializer(DestinationRepository destinationRepository, JdbcTemplate jdbcTemplate,
+            @Value("${lankastay.demo.seed-completed-reservation:false}") boolean seedDemoReviewReservation,
+            org.springframework.core.env.Environment environment) {
         this.destinationRepository = destinationRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.seedDemoReviewReservation = seedDemoReviewReservation
+                && environment.matchesProfiles("dev & !prod & !production");
     }
 
     @Override
@@ -29,6 +35,7 @@ public class SeedDataInitializer implements CommandLineRunner {
         // Domain seed data is intentionally separate from authentication bootstrap.
         try {
             seedRoomsAndRatesAndReservations(LocalDateTime.now());
+            if (seedDemoReviewReservation) seedDemoReviewReservation(LocalDateTime.now());
         } catch (Exception ex) {
             logger.warn("Could not seed domain entities: {}", ex.getMessage());
         }
@@ -106,6 +113,42 @@ public class SeedDataInitializer implements CommandLineRunner {
         logger.info("Successfully seeded 9 canonical destinations into MySQL database via JdbcTemplate.");
 
         seedHotelsIfEmpty(now);
+    }
+
+    private void seedDemoReviewReservation(LocalDateTime now) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM reservations WHERE reservation_code = 'DEMO-REVIEW-001'", Integer.class);
+        if (existing != null && existing > 0) {
+            logger.info("Demo review reservation already exists. Skipping demo reservation seed.");
+            return;
+        }
+
+        LocalDateTime createdAt = now;
+        java.time.LocalDate checkIn = java.time.LocalDate.now().minusDays(10);
+        java.time.LocalDate checkOut = java.time.LocalDate.now().minusDays(7);
+        String sql = "INSERT INTO reservations (reservation_code, hotel_id, customer_id, guest_name, guest_email, " +
+                "guest_phone, check_in, check_out, number_of_nights, adults, children, subtotal_amount, " +
+                "discount_amount, total_amount, tax_amount, net_amount, payment_status, reservation_status, " +
+                "assignment_state, created_at, updated_at) " +
+                "SELECT 'DEMO-REVIEW-001', r.hotel_id, c.id, CONCAT(c.first_name, ' ', c.last_name), c.email, " +
+                "c.phone, ?, ?, 3, 2, 0, rr.base_nightly_rate * 3, 0, rr.base_nightly_rate * 3, 0, " +
+                "rr.base_nightly_rate * 3, 'PAID', 'COMPLETED', 'UNASSIGNED', ?, ? " +
+                "FROM customer_users c CROSS JOIN rooms r JOIN room_rates rr ON rr.room_id = r.id " +
+                "WHERE c.status = 'ACTIVE' ORDER BY c.created_at, c.email LIMIT 1";
+        int inserted = jdbcTemplate.update(sql, checkIn, checkOut, createdAt, createdAt);
+        if (inserted == 0) {
+            logger.warn("Could not seed demo review reservation: no active customer and room rate found.");
+            return;
+        }
+
+        Long reservationId = jdbcTemplate.queryForObject(
+                "SELECT id FROM reservations WHERE reservation_code = 'DEMO-REVIEW-001'", Long.class);
+        jdbcTemplate.update(
+                "INSERT INTO reservation_items (reservation_id, room_id, room_rate_id, quantity, nightly_rate, total_price, room_name_snapshot) " +
+                        "SELECT ?, r.id, rr.id, 1, rr.base_nightly_rate, rr.base_nightly_rate * 3, r.name " +
+                        "FROM rooms r JOIN room_rates rr ON rr.room_id = r.id ORDER BY r.id LIMIT 1",
+                reservationId);
+        logger.info("Seeded completed demo reservation DEMO-REVIEW-001 for the first active customer.");
     }
 
     private void seedHotelsIfEmpty(LocalDateTime now) {

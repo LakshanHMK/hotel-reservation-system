@@ -63,9 +63,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/destinations/**", "/api/public/**", "/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/reset-password", "/api/v1/auth/forgot-password/check-email",
-                                "/api/v1/auth/forgot-password/change-password").permitAll()
-                        .requestMatchers("/api/v1/auth/dev-last-reset-link").permitAll()
+                                "/api/v1/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/public/discounts/validate",
+                                "/api/v1/management/discounts/validate").permitAll()
                         .requestMatchers("/api/v1/customer/auth/**").permitAll()
                         // Customer sessions are validated inside customer controllers; they are deliberately
                         // separate from the staff SecurityContext and all mutations remain CSRF protected.
@@ -77,12 +77,14 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionFixation(fixation -> fixation.changeSessionId())
-                        .maximumSessions(-1).sessionRegistry(sessionRegistry))
+                        .maximumSessions(-1).sessionRegistry(sessionRegistry)
+                        .expiredSessionStrategy(event -> writeSecurityError(event.getResponse(), 401, "Authentication is required.")))
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response, 401, "Authentication is required."))
                         .accessDeniedHandler((request, response, exception) -> writeSecurityError(response, 403, "Access is denied.")))
                 .headers(headers -> headers
                         .contentTypeOptions(Customizer.withDefaults())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; sandbox"))
                         .referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
                         .permissionsPolicy(policy -> policy.policy("camera=(), microphone=(), geolocation=(self)")))
                 .httpBasic(AbstractHttpConfigurer::disable)

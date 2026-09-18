@@ -39,6 +39,9 @@ public class AuthenticationPersistenceAndResetTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.lankastay.backend.service.EmailService emailService;
+
     @BeforeEach
     void setUp() {
         tokenRepository.deleteAll();
@@ -102,11 +105,13 @@ public class AuthenticationPersistenceAndResetTest {
         customerAuthService.register(reg, "127.0.0.1");
 
         // 1. Request reset (always returns generic message)
-        String genericMsg = passwordResetService.requestPasswordReset(new ForgotPasswordRequest(email), "127.0.0.1");
+        String genericMsg = passwordResetService.requestPasswordReset(new ForgotPasswordRequest(email), "127.0.0.1", true);
         assertEquals("If an account exists for that email, password reset instructions have been sent.", genericMsg);
 
-        // 2. Fetch dev reset link
-        String devLink = PasswordResetService.getDevLastResetLink(email);
+        // 2. Capture delivery at the private email boundary, not through HTTP.
+        org.mockito.ArgumentCaptor<String> link = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(emailService).sendPasswordReset(org.mockito.ArgumentMatchers.eq(email), link.capture());
+        String devLink = link.getValue();
         assertNotNull(devLink);
         assertTrue(devLink.contains("token="));
 
@@ -114,7 +119,7 @@ public class AuthenticationPersistenceAndResetTest {
 
         // 3. Reset password
         ResetPasswordRequest resetReq = new ResetPasswordRequest(rawToken, "NewPassword#2026!Secure", "NewPassword#2026!Secure");
-        assertDoesNotThrow(() -> passwordResetService.resetPassword(resetReq, "127.0.0.1"));
+        assertDoesNotThrow(() -> passwordResetService.resetPassword(resetReq, "127.0.0.1", true));
 
         // 4. Verify new password in DB
         CustomerUser updated = customerRepository.findByEmail(email).orElseThrow();
@@ -122,7 +127,7 @@ public class AuthenticationPersistenceAndResetTest {
         assertFalse(passwordEncoder.matches("OldPassword#2026!QA", updated.getPasswordHash()));
 
         // 5. Verify single-use token reuse fails
-        assertThrows(RuntimeException.class, () -> passwordResetService.resetPassword(resetReq, "127.0.0.1"));
+        assertThrows(RuntimeException.class, () -> passwordResetService.resetPassword(resetReq, "127.0.0.1", true));
     }
 
 }

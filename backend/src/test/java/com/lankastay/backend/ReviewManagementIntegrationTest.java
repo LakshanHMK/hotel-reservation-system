@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
@@ -421,23 +422,46 @@ class ReviewManagementIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
 
-        // Permanent deletion does not permit repeated reviews for the same stay.
-        mvc.perform(post("/api/v1/customer/reviews")
+        // A hard-deleted review must allow the same completed stay to be reviewed again.
+        assertThat(reservationRepository.findById(res.getId()).orElseThrow().getReviewSubmittedAt()).isNull();
+        assertThat(hotelRepository.findById(hotelA.getId()).orElseThrow().getReviewCount()).isZero();
+        mvc.perform(get("/api/v1/customer/reviews/eligible-stays")
+                        .session(customerSession(customerA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].eligible").value(true))
+                .andExpect(jsonPath("$[0].alreadyReviewed").value(false));
+
+        // Legacy historical markers must not block a stay with no review row.
+        Reservation legacyReservation = reservationRepository.findById(res.getId()).orElseThrow();
+        legacyReservation.setReviewSubmittedAt(java.time.LocalDateTime.now().minusDays(1));
+        reservationRepository.save(legacyReservation);
+        MvcResult recreated = mvc.perform(post("/api/v1/customer/reviews")
                         .session(customerSession(customerA))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(createReq)))
-                .andExpect(status().isConflict());
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long recreatedReviewId = jsonMapper.readTree(recreated.getResponse().getContentAsString()).get("id").asLong();
+        assertThat(recreatedReviewId).isNotEqualTo(review.getId());
+        assertThat(reviewRepository.findByReservationId(res.getId())).get().extracting(Review::getId)
+                .isEqualTo(recreatedReviewId);
         mvc.perform(get("/api/v1/customer/reviews/eligible-stays")
                         .session(customerSession(customerA)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].eligible").value(false))
                 .andExpect(jsonPath("$[0].alreadyReviewed").value(true));
 
-        // Rating should now be 0.0 with 0 count
+        // The recreated review is now the only public rating.
         Hotel updatedHotel = hotelRepository.findById(hotelA.getId()).orElseThrow();
-        assertThat(updatedHotel.getReviewCount()).isEqualTo(0);
-        assertThat(updatedHotel.getRating()).isEqualTo(0.0);
+        assertThat(updatedHotel.getReviewCount()).isEqualTo(1);
+        assertThat(updatedHotel.getRating()).isEqualTo(5.0);
+        mvc.perform(post("/api/v1/customer/reviews")
+                        .session(customerSession(customerA))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(createReq)))
+                .andExpect(status().isConflict());
     }
 
     @Test
