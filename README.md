@@ -83,8 +83,11 @@ flowchart TB
     subgraph clientTier["Client Tier"]
         spa["React 19 + Vite SPA - Port 5174<br/>Context state: CustomerContext,<br/>StaffContext, ReservationsContext<br/>Route guards: CustomerProtectedRoute<br/>and ManagementProtectedRoute"]
     end
-    subgraph communicationTier["Communication / Security Boundary"]
+    subgraph communicationTier[" "]
+        direction TB
+        communicationTitle["Communication / Security Boundary"]:::tierTitle
         transport["HTTP / JSON REST + credentialed CORS<br/>Session cookie: LANKASTAY_SESSION<br/>HttpOnly / SameSite=Lax<br/>CSRF header: X-XSRF-TOKEN"]
+        communicationTitle --> transport
     end
     subgraph applicationTier["Spring Boot Application Tier - Development port: 8080"]
         direction LR
@@ -102,11 +105,15 @@ flowchart TB
         end
         security --> controllers --> services --> persistence
     end
-    subgraph databaseTier["Database Tier"]
+    subgraph databaseTier[" "]
+        direction TB
+        databaseTitle["Database Tier"]:::tierTitle
         mysql[("MySQL 8+<br/>lankastay_db<br/>Flyway V1-V19<br/>B18 baseline for fresh installations")]
+        databaseTitle --> mysql
     end
-    spa --> transport --> applicationTier
-    applicationTier -->|JDBC / TCP 3306| mysql
+    spa --> communicationTier --> applicationTier
+    applicationTier -->|JDBC / TCP 3306| databaseTier
+    classDef tierTitle fill:transparent,stroke:transparent,color:#333,font-weight:bold;
 ```
 
 ---
