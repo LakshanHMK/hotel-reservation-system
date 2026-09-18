@@ -16,7 +16,18 @@
 | `PATCH /api/v1/admin/staff/{id}` | DENY | ALLOW | DENY | DENY |
 | `PATCH /api/v1/admin/staff/{id}/status` | DENY | ALLOW | DENY | DENY |
 | `POST /api/v1/admin/staff/{id}/reset-password` | DENY | ALLOW | DENY | DENY |
-| Existing `/api/management/destinations/**` | DENY | ALLOW | ASSIGNED_SCOPE_ONLY | DENY |
+| GET `/api/management/destinations/**` (including attractions) | DENY | ALLOW | ALLOW | ALLOW |
+| POST/PUT/PATCH/DELETE `/api/management/destinations/**` (including attractions) | DENY | ALLOW | DENY | DENY |
+| GET `/api/v1/management/discounts/**` | DENY | GLOBAL | ASSIGNED_SCOPE_ONLY | ASSIGNED_SCOPE_ONLY |
+| POST/PUT `/api/v1/management/discounts/**` | DENY | GLOBAL | ASSIGNED_SCOPE_ONLY | DENY |
+| DELETE `/api/v1/management/discounts/{id}` | DENY | ALLOW | DENY | DENY |
+| GET `/api/public/discounts/validate` | ALLOW | ALLOW | ALLOW | ALLOW |
 | Existing `POST /api/media/upload` | DENY | ALLOW | ASSIGNED_SCOPE_ONLY | DENY |
 
 Management operations cannot target the acting manager or another `MANAGER`. Public staff registration does not exist.
+
+Global destinations and attractions are manager-owned catalog data, not hotel-assigned resources.
+Discount staff scope is reloaded from the active staff database row, requires an existing assigned hotel, and fails closed on null assignment.
+Updates cannot change discount hotel ownership. Managers retain global (null-hotel) discounts.
+Customer and staff reset requests use their separate auth namespaces; only hash-stored, unused, unexpired tokens for that namespace can reset passwords.
+Retired tokenless, email-check, and development token lookup URLs return 404 in every profile.
