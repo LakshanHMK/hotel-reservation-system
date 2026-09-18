@@ -81,16 +81,14 @@ export const authApi = {
   login: (credentials) => apiRequest('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   changeInitialPassword: (data) => apiRequest('/api/v1/auth/change-initial-password', { method: 'POST', body: JSON.stringify(data) }),
   changePassword: (data) => apiRequest('/api/v1/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
-  checkStaffForgotPasswordEmail: (data) => apiRequest('/api/v1/auth/forgot-password/check-email', { method: 'POST', body: JSON.stringify(data) }),
-  changeStaffForgottenPassword: (data) => apiRequest('/api/v1/auth/forgot-password/change-password', { method: 'POST', body: JSON.stringify(data) }),
   logout: async () => {
     try { return await apiRequest('/api/v1/auth/logout', { method: 'POST' }) }
     finally { csrf = null }
   },
   customerRegister: (data) => apiRequest('/api/v1/customer/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   customerLogin: (credentials) => apiRequest('/api/v1/customer/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
-  checkCustomerForgotPasswordEmail: (data) => apiRequest('/api/v1/customer/auth/forgot-password/check-email', { method: 'POST', body: JSON.stringify(data) }),
-  changeCustomerForgottenPassword: (data) => apiRequest('/api/v1/customer/auth/forgot-password/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  customerForgotPassword: (data) => apiRequest('/api/v1/customer/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
+  customerResetPassword: (data) => apiRequest('/api/v1/customer/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }),
   customerMe: () => apiRequest('/api/v1/customer/auth/me'),
   customerProfile: () => apiRequest('/api/v1/customer/profile'),
   updateCustomerProfile: (data) => apiRequest('/api/v1/customer/profile', { method: 'PUT', body: JSON.stringify(data) }),
@@ -101,5 +99,4 @@ export const authApi = {
   },
   forgotPassword: (data) => apiRequest('/api/v1/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
   resetPassword: (data) => apiRequest('/api/v1/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }),
-  getDevLastResetLink: (email) => apiRequest(`/api/v1/auth/dev-last-reset-link${email ? `?email=${encodeURIComponent(email)}` : ''}`),
 }

@@ -3,7 +3,6 @@ package com.lankastay.backend.service;
 import com.lankastay.backend.dto.auth.CustomerLoginRequest;
 import com.lankastay.backend.dto.auth.CustomerRegisterRequest;
 import com.lankastay.backend.dto.auth.CustomerResponse;
-import com.lankastay.backend.dto.auth.SimpleForgotPasswordRequest;
 import com.lankastay.backend.entity.CustomerUser;
 import com.lankastay.backend.entity.SecurityEventType;
 import com.lankastay.backend.exception.ApiException;
@@ -107,32 +106,6 @@ public class CustomerAuthenticationService {
         return customer;
     }
 
-    @Transactional(readOnly = true)
-    public boolean forgotPasswordEmailExists(String email) {
-        return customerRepository.existsByEmail(CustomerUser.normalizeEmail(email));
-    }
-
-    @Transactional
-    public void resetForgottenPassword(SimpleForgotPasswordRequest request, String ipAddress) {
-        String normalizedEmail = CustomerUser.normalizeEmail(request.email());
-        CustomerUser customer = customerRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Not Found", "No account found with this email."));
-
-        if (!request.newPassword().equals(request.confirmPassword())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password and confirmation do not match.");
-        }
-
-        passwordPolicy.validate(request.newPassword());
-        if (encoder.matches(request.newPassword(), customer.getPasswordHash())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password must be different from current password.");
-        }
-
-        customer.setPasswordHash(encoder.encode(request.newPassword()));
-        customer.setFailedLoginAttempts(0);
-        customer.setLockedUntil(null);
-        customerRepository.save(customer);
-        audit.record(customer.getId(), customer.getId(), SecurityEventType.PASSWORD_RESET_COMPLETED, ipAddress, "SUCCESS");
-    }
 
     @Transactional
     public CustomerResponse updateProfile(UUID customerId, com.lankastay.backend.dto.auth.UpdateCustomerProfileRequest request, String ipAddress) {

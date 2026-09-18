@@ -24,13 +24,15 @@ public class CustomerReservationController {
     }
 
     @PostMapping
-    public ResponseEntity<ReservationResponse> create(@Valid @RequestBody CreateReservationRequest request, HttpServletRequest servletRequest) {
+    public ResponseEntity<ReservationResponse> create(@Valid @RequestBody CreateReservationRequest request,
+            HttpServletRequest servletRequest) {
         CustomerUser customer = sessions.requireCustomer(servletRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(reservations.create(customer.getId(), request));
     }
 
     @PostMapping("/quote")
-    public ReservationQuoteResponse quote(@Valid @RequestBody ReservationQuoteRequest body, HttpServletRequest request) {
+    public ReservationQuoteResponse quote(@Valid @RequestBody ReservationQuoteRequest body,
+            HttpServletRequest request) {
         sessions.requireCustomer(request);
         return reservations.quote(body);
     }
@@ -46,7 +48,8 @@ public class CustomerReservationController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ReservationResponse cancel(@PathVariable Long id, @Valid @RequestBody CancellationRequest body, HttpServletRequest request) {
+    public ReservationResponse cancel(@PathVariable Long id, @Valid @RequestBody CancellationRequest body,
+            HttpServletRequest request) {
         return reservations.cancel(sessions.requireCustomer(request).getId(), id, body);
     }
 
@@ -58,10 +61,10 @@ public class CustomerReservationController {
 
     @GetMapping("/availability")
     public AvailabilityResponse availability(@RequestParam Long hotelId, @RequestParam Long roomId,
-                                             @RequestParam LocalDate checkIn, @RequestParam LocalDate checkOut,
-                                             @RequestParam(defaultValue = "1") int quantity,
-                                             HttpServletRequest request) {
-        sessions.requireCustomer(request);
+            @RequestParam LocalDate checkIn, @RequestParam LocalDate checkOut,
+            @RequestParam(defaultValue = "1") int quantity) {
+        // This is a public, read-only discovery check. Quote and create still
+        // require a customer session and recheck availability transactionally.
         return reservations.availability(hotelId, roomId, checkIn, checkOut, quantity);
     }
 }

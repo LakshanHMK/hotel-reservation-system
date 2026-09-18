@@ -2,7 +2,6 @@ package com.lankastay.backend.service;
 
 import com.lankastay.backend.dto.auth.ChangeInitialPasswordRequest;
 import com.lankastay.backend.dto.auth.ChangePasswordRequest;
-import com.lankastay.backend.dto.auth.SimpleForgotPasswordRequest;
 import com.lankastay.backend.dto.auth.StaffLoginRequest;
 import com.lankastay.backend.entity.*;
 import com.lankastay.backend.exception.ApiException;
@@ -160,30 +159,4 @@ public class AuthenticationService {
         return user;
     }
 
-    @Transactional(readOnly = true)
-    public boolean forgotPasswordEmailExists(String email) {
-        return users.existsByEmail(StaffUser.normalizeEmail(email));
-    }
-
-    @Transactional
-    public void resetForgottenPassword(SimpleForgotPasswordRequest request, String ip) {
-        String email = StaffUser.normalizeEmail(request.email());
-        StaffUser user = users.findByEmail(email)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Not Found", "No account found with this email."));
-
-        if (!request.newPassword().equals(request.confirmPassword())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password and confirmation do not match.");
-        }
-        passwordPolicy.validate(request.newPassword());
-        if (encoder.matches(request.newPassword(), user.getPasswordHash())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation Error", "New password must be different from current password.");
-        }
-
-        user.setPasswordHash(encoder.encode(request.newPassword()));
-        user.setMustChangePassword(false);
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        users.save(user);
-        audit.record(user.getId(), user.getId(), SecurityEventType.PASSWORD_RESET_COMPLETED, ip, "SUCCESS");
-    }
 }

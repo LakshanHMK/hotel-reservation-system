@@ -39,8 +39,8 @@ function ResetPassword() {
     }
     if (!newPassword) {
       nextErrors.newPassword = "New password is required.";
-    } else if (!passwordChecks.length || !passwordChecks.letter || !passwordChecks.number) {
-      nextErrors.newPassword = "Use at least 8 characters with a letter and a number.";
+    } else if (!passwordChecks.length || !passwordChecks.uppercase || !passwordChecks.lowercase || !passwordChecks.number || !passwordChecks.special) {
+      nextErrors.newPassword = "Use 8-128 characters with uppercase, lowercase, number, and special character.";
     }
     if (!confirmPassword) {
       nextErrors.confirmPassword = "Please confirm your new password.";
@@ -54,7 +54,7 @@ function ResetPassword() {
       return;
     }
 
-    authApi.resetPassword({ token, newPassword, confirmNewPassword: confirmPassword })
+    authApi.customerResetPassword({ token, newPassword, confirmNewPassword: confirmPassword })
       .then((res) => {
         setStatus({
           type: "success",

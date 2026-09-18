@@ -1,27 +1,57 @@
-# Environment secret files
+# Environment / secrets
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+scripts/qa/.env.qa
 
-# Build and runtime outputs
-backend/target/
-backend/.mvn-repository/
-frontend/node_modules/
-frontend/dist/
+# Java / Maven
+**/target/
+**/*.class
+**/.m2/
+**/.mvn-repository/
+
+# React / Node
+**/node_modules/
+**/dist/
+frontend/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# Logs / crash dumps
 *.log
+*.err.log
+*.cookies
+hs_err_pid*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary
+tmp/
+scratch/
+*.tmp
 *.zip
 
-# OS and IDE junk
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# Duplicate / tool repositories
+.rollback-worktree/
+.target-repo/
+hotel-reservation-system/
 
-# User uploads (keep directory structure tracked via .gitkeep)
+# Runtime uploads (Preserve directory structure via .gitkeep)
 uploads/*
 !uploads/.gitkeep
 !uploads/destinations/
-!uploads/destinations/.gitkeep
 !uploads/hotels/
+uploads/destinations/*
+!uploads/destinations/.gitkeep
+uploads/hotels/*
 !uploads/hotels/.gitkeep
+backend/uploads/

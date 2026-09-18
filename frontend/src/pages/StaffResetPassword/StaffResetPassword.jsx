@@ -52,7 +52,7 @@ function StaffResetPassword() {
       <form className="staff-auth-form" noValidate onSubmit={handleSubmit}>
         <PasswordField id="reset-new-password" label="New Password" value={newPassword} onChange={change('newPassword', setNewPassword)} error={errors.newPassword} visible={visible.newPassword} onToggle={() => setVisible((current) => ({ ...current, newPassword: !current.newPassword }))} autoComplete="new-password" />
         <PasswordField id="reset-confirm-password" label="Confirm New Password" value={confirmPassword} onChange={change('confirmPassword', setConfirmPassword)} error={errors.confirmPassword} visible={visible.confirmPassword} onToggle={() => setVisible((current) => ({ ...current, confirmPassword: !current.confirmPassword }))} autoComplete="new-password" />
-        <p className="staff-auth-note">A future backend must validate token expiry, account status, and one-time token use.</p>
+        <p className="staff-auth-note">Reset links expire after 30 minutes and can be used only once.</p>
         <button className="staff-auth-submit" type="submit"><RotateCcwKey aria-hidden="true" size={18} />Reset Password</button>
         {status && <p className="staff-auth-status" role="status" aria-live="polite">{status}</p>}
       </form>
