@@ -2,15 +2,13 @@ name: LankaStay Backend CI
 
 on:
   push:
-    branches: [ main, java-only ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-ci.yml'
-  pull_request:
-    branches: [ main, java-only ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-ci.yml'
+  branches: [ main ]
+  paths:
+    - 'backend/**'
+    - '.github/workflows/backend-ci.yml'
+
+pull_request:
+  branches: [ main ]
 
 jobs:
   build:
