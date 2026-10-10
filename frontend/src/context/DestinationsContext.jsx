@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import initialDestinations from '../data/destinations.js'
 import { destinationApi, resolveDestinationMediaUrl } from '../services/destinationApi.js'
+import { isStaticPreview } from '../config/staticPreview.js'
 import { DESTINATION_STATUS, normalizeDestination } from '../utils/destinationDomain.js'
 import DestinationsContext from './destinationsContext.js'
 
@@ -12,10 +13,11 @@ export function DestinationsProvider({ children }) {
   const [destinations, setDestinations] = useState(() => initialDestinations.map(normalizeDestination))
   const [createDraft, setCreateDraft] = useState(null)
   const [editDrafts, setEditDrafts] = useState({})
-  const [destinationsLoading, setDestinationsLoading] = useState(true)
+  const [destinationsLoading, setDestinationsLoading] = useState(!isStaticPreview)
   const [destinationError, setDestinationError] = useState('')
 
   useEffect(() => {
+    if (isStaticPreview) return undefined
     let active = true
     destinationApi.list().then((items) => {
       if (active) setDestinations((items || []).map(normalizeApiDestination))

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-pages-fallback.mjs",
     "test:security": "node scripts/securityPhaseOne.test.mjs",
     "lint": "oxlint",
     "test:reservations": "node scripts/reservationDomain.test.mjs",
@@ -16,6 +16,7 @@
     "test:rates": "node scripts/rateDomain.test.mjs",
     "test:destination-discovery": "node scripts/destinationDiscovery.test.mjs",
     "test:destination-cards": "node scripts/destinationCardVisual.test.mjs",
+    "test:pages-preview": "node scripts/pagesPreview.test.mjs",
     "test:rooms": "node scripts/roomDomain.test.mjs",
     "test:offers": "node scripts/offerDomain.test.mjs",
     "test:customer-offers": "node scripts/customerOfferIntegration.test.mjs",

@@ -1,6 +1,8 @@
 import { apiRequest } from './authApi.js'
 
-const apiBaseUrl = (import.meta.env?.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const apiBaseUrl = (typeof __LANKASTAY_API_BASE__ !== 'undefined'
+  ? __LANKASTAY_API_BASE__
+  : (import.meta.env?.VITE_API_URL || 'http://localhost:8080')).replace(/\/$/, '')
 
 export function resolveDestinationMediaUrl(value) {
   return typeof value === 'string' && value.startsWith('/uploads/') ? `${apiBaseUrl}${value}` : value

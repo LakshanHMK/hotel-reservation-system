@@ -26,3 +26,8 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the Oxlint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+# GitHub Pages preview
+
+The static preview is built with `VITE_STATIC_PREVIEW=true` by the GitHub Pages workflow. It uses the safe local destination, hotel, and content samples included with the frontend; it does not connect to the Spring Boot API or MySQL database. Login, registration, reservations, reviews that require an account, uploads, and all management/data writes require the backend and are unavailable in this preview. No booking, payment, upload, or save is simulated.
+
+The production build uses `/hotel-reservation-system/` as its Vite base and generates `dist/404.html` for GitHub Pages client-side route fallback. Local `npm run dev` continues to use `/` and its existing backend proxy.
