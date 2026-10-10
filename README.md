@@ -339,6 +339,17 @@ npm run dev
 
 ## 15. Testing & Quality Verification
 
+### Destination image storage
+
+Destination images are validated, re-encoded, assigned unique server-generated names, and stored under
+`FILE_UPLOAD_DIR/destinations` (`uploads/destinations` by default). The database stores portable URLs such as
+`/uploads/destinations/dest_<uuid>.png`; runtime files are excluded from Git. Set `FILE_UPLOAD_DIR` to an absolute,
+writable path when the backend is launched from a different working directory.
+
+For cloud hosting, the upload directory must be mounted on persistent storage or replaced with managed object
+storage. A normal Railway/container filesystem is ephemeral, so local container uploads will not survive a redeploy
+unless a persistent volume is mounted at `FILE_UPLOAD_DIR`.
+
 ### Backend Automated Test Suite
 Run unit tests and Spring Boot integration tests:
 ```powershell

@@ -12,6 +12,7 @@
     "test:content": "node scripts/contentDomain.test.mjs",
     "test:hotels": "node scripts/hotelDomain.test.mjs",
     "test:destinations": "node scripts/destinationDomain.test.mjs",
+    "test:destination-api": "node scripts/destinationApi.test.mjs",
     "test:rates": "node scripts/rateDomain.test.mjs",
     "test:destination-discovery": "node scripts/destinationDiscovery.test.mjs",
     "test:destination-cards": "node scripts/destinationCardVisual.test.mjs",

@@ -7,6 +7,7 @@ import ManagementSelect from '../../components/ManagementSelect/ManagementSelect
 import MapLocationPicker from '../../components/MapLocationPicker/MapLocationPicker.jsx'
 import useDestinations from '../../context/useDestinations.js'
 import useManagementFeedback from '../../context/useManagementFeedback.js'
+import { destinationApi, resolveDestinationMediaUrl } from '../../services/destinationApi.js'
 import { discoverNearbyPlaces } from '../../services/nearbyPlacesService.js'
 import { AttractionIcon, ThemeIcon } from '../../utils/destinationIcons.jsx'
 import { ATTRACTION_TYPES, createDestinationSaveMetadata, DESTINATION_STATUS, DESTINATION_THEMES, calculateDistanceKm, formatDistanceKm, getAttractionType, getDestinationResumeStep, getDestinationThemes, getFirstInvalidDestinationStep, getHighestReachableDestinationStep, hasCoordinates, isDuplicateAttraction, normalizeDestination, validateDestinationForReview, validateDestinationStep } from '../../utils/destinationDomain.js'
@@ -51,6 +52,7 @@ function DestinationForm() {
   const [discardOpen, setDiscardOpen] = useState(false)
   const [success, setSuccess] = useState(null)
   const [actionNotice, setActionNotice] = useState('')
+  const [saving, setSaving] = useState(false)
   const [radius, setRadius] = useState(10)
   const [categories, setCategories] = useState(defaultCategories)
   const [candidates, setCandidates] = useState([])
@@ -107,19 +109,25 @@ function DestinationForm() {
     if (Object.keys(next).length) { notify(Object.values(next)[0], 'error'); focusError(); return }
     setStep((value) => Math.min(5, value + 1)); window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  const saveDraft = () => {
+  const saveDraft = async () => {
     const next = errorsForStep(step)
     setErrors(next)
     if (Object.keys(next).length) { notify(Object.values(next)[0], 'error'); focusError(); return }
     const metadata = createDestinationSaveMetadata(step, form.lastCompletedStep)
-    const saved = saveDestinationDraft(id, form, metadata)
-    setForm((current) => normalizeDestination({ ...current, ...metadata, id: saved.id, status: saved.status, updatedAt: saved.updatedAt, lastUpdatedAt: saved.lastUpdatedAt }))
-    setDirty(false)
-    notify(`${SECTION_NAMES[step]} saved successfully.`)
-    setActionNotice(`${SECTION_NAMES[step]} saved successfully.`)
-    if (!id) navigate(`/management/destinations/${saved.id}/edit?step=${step + 1}`, { replace: true })
+    setSaving(true)
+    try {
+      const saved = await saveDestinationDraft(id, form, metadata)
+      setForm((current) => normalizeDestination({ ...current, ...saved, ...metadata }))
+      setDirty(false)
+      notify(`${SECTION_NAMES[step]} saved successfully.`)
+      setActionNotice(`${SECTION_NAMES[step]} saved successfully.`)
+      if (!id) navigate(`/management/destinations/${saved.id}/edit?step=${step + 1}`, { replace: true })
+    } catch (error) {
+      const message = error.message || 'The Destination could not be saved.'
+      notify(message, 'error'); setActionNotice(message)
+    } finally { setSaving(false) }
   }
-  const submit = () => {
+  const submit = async () => {
     const next = validateDestinationForReview(form)
     if (duplicateName()) next.name = 'A Destination with this name already exists.'
     setErrors(next)
@@ -127,21 +135,33 @@ function DestinationForm() {
       const invalid = getFirstInvalidDestinationStep(form) ?? 0
       setStep(invalid); notify(`Step ${invalid + 1} needs attention: ${Object.values(next)[0]}`, 'error'); return
     }
-    if (id && form.status !== DESTINATION_STATUS.DRAFT) {
-      updateDestination(id, { ...form, lastSavedStep: 6, lastCompletedStep: 6, draftStep: 5, lastUpdatedSection: 'Review & Submit' })
-      clearEditDraft(id); setDirty(false); setSuccess({ name: form.name, updated: true, id }); return
-    }
-    const target = id ? { id } : saveDestinationDraft(null, form, { lastSavedStep: 5, lastCompletedStep: 5, lastUpdatedSection: 'Highlights & Attractions' })
-    const result = submitDestinationForReview(target.id, form)
-    if (!result.ok) { setErrors(result.errors); setStep(getFirstInvalidDestinationStep(form) ?? 0); return }
-    if (id) clearEditDraft(id); else clearCreateDraft()
-    setDirty(false); setSuccess({ name: form.name, updated: false })
+    setSaving(true)
+    try {
+      if (id && form.status !== DESTINATION_STATUS.DRAFT) {
+        await updateDestination(id, { ...form, lastSavedStep: 6, lastCompletedStep: 6, draftStep: 5, lastUpdatedSection: 'Review & Submit' })
+        clearEditDraft(id); setDirty(false); setSuccess({ name: form.name, updated: true, id }); return
+      }
+      const target = id ? { id } : await saveDestinationDraft(null, form, { lastSavedStep: 5, lastCompletedStep: 5, lastUpdatedSection: 'Highlights & Attractions' })
+      await submitDestinationForReview(target.id, { ...form, version: target.version })
+      if (id) clearEditDraft(id); else clearCreateDraft()
+      setDirty(false); setSuccess({ name: form.name, updated: false })
+    } catch (error) {
+      const message = error.message || 'The Destination could not be submitted.'
+      notify(message, 'error'); setActionNotice(message)
+    } finally { setSaving(false) }
   }
-  const chooseImage = (event) => {
+  const chooseImage = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) { setErrors((current) => ({ ...current, mainImage: 'Use a JPG, PNG or WebP image up to 5 MB.' })); return }
-    change('mainImage', URL.createObjectURL(file)); setActionNotice('Main image changed. Adjust its focal point for both previews.')
+    setSaving(true)
+    try {
+      const uploaded = await destinationApi.uploadImage(file)
+      change('mainImage', resolveDestinationMediaUrl(uploaded.url)); setActionNotice('Main image uploaded. Adjust its focal point for both previews.')
+    } catch (error) {
+      const message = error.message || 'Unable to upload the Destination image.'
+      setErrors((current) => ({ ...current, mainImage: message })); notify(message, 'error')
+    } finally { setSaving(false); event.target.value = '' }
   }
   const addHighlight = (value = highlightText) => {
     const text = value.trim()
@@ -185,7 +205,7 @@ function DestinationForm() {
     <header><div><span>Destination record</span><h1>{isEditing ? 'Edit Destination' : 'Create Destination'}</h1><p>{isEditing ? `Editing Destination · ${existing.name}` : 'Build one shared Destination record for management and customer discovery.'}</p></div><div className="destination-draft-state"><strong className={`destination-status-badge destination-status-badge--${form.status.toLowerCase()}`}>{form.status.replaceAll('_', ' ')}</strong>{dirty && <span>Unsaved Changes</span>}{form.lastUpdatedAt && <small>Last saved · {new Date(form.lastUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>}</div></header>
     {actionNotice && <p className="destination-action-notice" role="status" aria-live="polite">{actionNotice}</p>}
     <nav className="destination-stepper" aria-label="Destination setup progress"><div><span style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }} /></div><p>Step {step + 1} of {STEPS.length}</p><ol>{STEPS.map((label, index) => { const completed = index < Number(form.lastCompletedStep || 0); const reachable = index <= Math.max(getHighestReachableDestinationStep(form), Math.min(5, Number(form.lastCompletedStep || 0))); return <li key={label} className={index === step ? 'is-current' : completed ? 'is-complete' : ''}><button type="button" disabled={!reachable} onClick={() => goToStep(index)} aria-current={index === step ? 'step' : undefined}><span>{completed ? <Check size={14} /> : index + 1}</span>{label}</button></li> })}</ol></nav>
-    <form onSubmit={(event) => { event.preventDefault(); submit() }} noValidate>
+    <form onSubmit={(event) => { event.preventDefault(); submit() }} noValidate aria-busy={saving}>
       {step === 0 && <StepCard eyebrow="Step 1" title="Destination Identity" copy="Create the name and descriptions guests will see."><div className="destination-fields" ref={firstField}><Field label="Destination Name *" value={form.name} error={errors.name} onChange={(value) => change('name', value)} /><Field wide area rows={3} maxLength={220} label={`Short Description * · ${form.shortDescription.length} / 220`} value={form.shortDescription} error={errors.shortDescription} onChange={(value) => change('shortDescription', value)} helper="Used on Destination cards and discovery surfaces." /><Field wide area rows={7} label="Full Description *" value={form.fullDescription} error={errors.fullDescription} onChange={(value) => change('fullDescription', value)} /></div></StepCard>}
       {step === 1 && <StepCard eyebrow="Step 2" title="Travel Themes" copy="Choose every theme that genuinely describes this Destination."><div className="destination-theme-grid" ref={firstField} role="group" aria-label="Travel Themes">{DESTINATION_THEMES.map((theme) => { const selected = form.themeKeys.includes(theme.key); return <button key={theme.key} type="button" aria-pressed={selected} className={selected ? 'is-selected' : ''} onClick={() => change('themeKeys', selected ? form.themeKeys.filter((key) => key !== theme.key) : [...form.themeKeys, theme.key])}><ThemeIcon themeKey={theme.key} size={22} /><span><strong>{theme.label}</strong><small>{theme.description}</small></span>{selected && <Check size={17} />}</button> })}</div>{errors.themeKeys && <small className="destination-field-error" role="alert">{errors.themeKeys}</small>}</StepCard>}
       {step === 2 && <StepCard eyebrow="Step 3" title="Location" copy="Choose a Province and District, then confirm the exact Destination centre."><div className="destination-location-fields" ref={firstField}><ManagementSelect label="Province" required value={form.region} placeholder="Select province" options={SRI_LANKA_PROVINCES.map((value) => ({ value, label: value }))} onChange={(value) => { setForm((current) => ({ ...current, region: value, district: '', latitude: null, longitude: null, locationConfirmed: false })); setErrors((current) => ({ ...current, region: '', district: '', location: '' })); setDirty(true) }} error={errors.region} /><ManagementSelect label="District" required value={form.district} placeholder={form.region ? 'Select district' : 'Select a Province first'} options={getDistrictsForProvince(form.region).map((item) => ({ value: item.name, label: item.name }))} onChange={(value) => { const centre = getDistrictCentre(form.region, value); setForm((current) => ({ ...current, district: value, latitude: centre?.latitude ?? null, longitude: centre?.longitude ?? null, locationConfirmed: false })); setErrors((current) => ({ ...current, district: '', location: '' })); setDirty(true) }} error={errors.district} /></div>{form.district && hasCoordinates(form) && !form.locationConfirmed && <div className="destination-location-suggestion"><strong>Suggested Destination centre</strong><p>The map is centred on {form.district} District. Drag the marker or click the map to adjust it, then confirm the location.</p><button type="button" onClick={() => change('locationConfirmed', true)}><Check size={15} />Confirm suggested centre</button></div>}<MapLocationPicker latitude={form.latitude} longitude={form.longitude} onChange={(location) => { setForm((current) => ({ ...current, ...location, locationConfirmed: hasCoordinates(location) })); setDirty(true); setErrors((current) => ({ ...current, location: '' })) }} label={[form.name || form.district, form.region, 'Sri Lanka'].filter(Boolean).join(', ')} heading="Destination centre" error={errors.location} />{form.locationConfirmed && <div className="destination-selected-location"><strong>Selected Location</strong><span>{form.name || form.district}</span><small>{form.region} · {form.district} District</small><p>Destination centre selected</p></div>}</StepCard>}
@@ -199,7 +219,7 @@ function DestinationForm() {
         <section className="added-attractions" ref={attractionsRef} tabIndex="-1"><div className="section-heading"><div><h3>Added Attractions</h3><p>Only active curated attractions are shown to customers.</p></div><button type="button" onClick={() => setEditor({})}><Plus size={15} />Add Attraction Manually</button></div>{form.attractions.length ? <div>{form.attractions.map((item, index) => <article key={item.id}><div className="attraction-card-media">{item.image ? <img src={item.image} alt={`${item.name} attraction`} /> : <AttractionIcon type={item.type} size={25} />}</div><div className="attraction-card-copy"><strong>{item.name}</strong><small>{getAttractionType(item.type).label} · {formatDistanceKm(calculateDistanceKm(form, item)) || 'Location pending'}</small><p>{item.shortDescription || 'No description added.'}</p></div><span className={`attraction-status attraction-status--${item.status.toLowerCase()}`}>{item.status}</span><div className="attraction-card-actions"><button type="button" onClick={() => setViewingAttraction(item)}><Eye size={14} />View</button><button type="button" onClick={() => setEditor(item)}><Pencil size={14} />Edit</button>{hasCoordinates(item) && <a href={`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`} target="_blank" rel="noreferrer"><MapPin size={14} />Map</a>}<span className="attraction-order-actions"><button type="button" disabled={index === 0} title="Move up" aria-label={`Move ${item.name} up`} onClick={() => move('attractions', index, -1)}><ChevronUp size={15} /></button><button type="button" disabled={index === form.attractions.length - 1} title="Move down" aria-label={`Move ${item.name} down`} onClick={() => move('attractions', index, 1)}><ChevronDown size={15} /></button></span><button type="button" className={item.status === 'ACTIVE' ? 'danger' : ''} onClick={() => change('attractions', form.attractions.map((current) => current.id === item.id ? { ...current, status: current.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : current))}>{item.status === 'ACTIVE' ? <><EyeOff size={14} />Deactivate</> : <><CheckCircle2 size={14} />Reactivate</>}</button></div></article>)}</div> : <Empty text="No curated attractions have been added yet. Search nearby places or add one manually." action="Add Attraction Manually" onClick={() => setEditor({})} />}</section>
       </StepCard>}
       {step === 5 && <ReviewStep form={form} errors={errors} onEdit={goToStep} />}
-      <footer className="destination-form-actions"><button type="button" className="secondary" onClick={() => dirty ? setDiscardOpen(true) : navigate('/management/destinations')}>Cancel</button>{step < 5 && <button type="button" className="secondary" onClick={saveDraft}><Save size={16} />Save Draft</button>}<div>{step > 0 && <button type="button" className="secondary" onClick={() => goToStep(step - 1)}><ArrowLeft size={16} />Back</button>}{step < 5 ? <button type="button" className="primary" onClick={continueStep}>Continue<ArrowRight size={16} /></button> : <button type="submit" className="primary">{form.status === DESTINATION_STATUS.DRAFT ? 'Submit for Manager Review' : 'Save Changes'}</button>}</div></footer>
+      <footer className="destination-form-actions"><button type="button" className="secondary" disabled={saving} onClick={() => dirty ? setDiscardOpen(true) : navigate('/management/destinations')}>Cancel</button>{step < 5 && <button type="button" className="secondary" disabled={saving} onClick={saveDraft}><Save size={16} />{saving ? 'Saving…' : 'Save Draft'}</button>}<div>{step > 0 && <button type="button" className="secondary" disabled={saving} onClick={() => goToStep(step - 1)}><ArrowLeft size={16} />Back</button>}{step < 5 ? <button type="button" className="primary" disabled={saving} onClick={continueStep}>Continue<ArrowRight size={16} /></button> : <button type="submit" className="primary" disabled={saving}>{saving ? 'Saving…' : form.status === DESTINATION_STATUS.DRAFT ? 'Submit for Manager Review' : 'Save Changes'}</button>}</div></footer>
     </form>
     {editor && <AttractionEditor attraction={editor.id ? editor : null} destination={form} attractions={form.attractions} onSave={saveAttraction} onClose={() => setEditor(null)} />}
     {viewingAttraction && <ManagementDialog title={viewingAttraction.name} description={`${getAttractionType(viewingAttraction.type).label} · ${viewingAttraction.status}`} onClose={() => setViewingAttraction(null)} actions={<><button type="button" onClick={() => setViewingAttraction(null)}>Close</button><button className="management-dialog-primary" type="button" onClick={() => { setEditor(viewingAttraction); setViewingAttraction(null) }}>Edit Attraction</button></>}><div className="attraction-view"><span className="attraction-view-icon"><AttractionIcon type={viewingAttraction.type} size={25} /></span><dl><div><dt>Description</dt><dd>{viewingAttraction.shortDescription || 'No description added.'}</dd></div><div><dt>Distance</dt><dd>{formatDistanceKm(calculateDistanceKm(form, viewingAttraction)) || 'Location pending'}</dd></div><div><dt>Coordinates</dt><dd>{hasCoordinates(viewingAttraction) ? `${viewingAttraction.latitude}, ${viewingAttraction.longitude}` : 'Not configured'}</dd></div><div><dt>Source</dt><dd>{viewingAttraction.source || viewingAttraction.sourceId ? 'OpenStreetMap' : 'Manually curated'}</dd></div></dl>{hasCoordinates(viewingAttraction) && <a href={`https://www.google.com/maps/search/?api=1&query=${viewingAttraction.latitude},${viewingAttraction.longitude}`} target="_blank" rel="noreferrer">View on Map <ExternalLink size={14} /></a>}</div></ManagementDialog>}
