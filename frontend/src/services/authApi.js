@@ -1,4 +1,9 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const isStaticPreview = typeof __STATIC_PREVIEW__ !== 'undefined'
+  ? __STATIC_PREVIEW__
+  : import.meta.env?.VITE_STATIC_PREVIEW === 'true'
+const API_BASE_URL = (typeof __LANKASTAY_API_BASE__ !== 'undefined'
+  ? __LANKASTAY_API_BASE__
+  : (import.meta.env?.VITE_API_URL || 'http://localhost:8080')).replace(/\/$/, '')
 
 let csrf = null
 let csrfPromise = null
@@ -38,6 +43,12 @@ async function ensureCsrf() {
 }
 
 export async function apiRequest(path, options = {}) {
+  if (isStaticPreview) {
+    const error = new Error('This action requires the LankaStay backend and is unavailable in the frontend preview.')
+    error.status = 503
+    error.code = 'STATIC_PREVIEW_BACKEND_UNAVAILABLE'
+    throw error
+  }
   const method = (options.method || 'GET').toUpperCase()
   const headers = new Headers(options.headers)
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {

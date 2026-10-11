@@ -73,13 +73,18 @@ export function normalizeDestination(destination) {
     mainImage: destination.mainImage || destination.image || '', image: destination.mainImage || destination.image || '', galleryImages: destination.galleryImages || [],
     highlights: Array.isArray(destination.highlights) ? destination.highlights.filter(Boolean) : [],
     attractions: seededAttractions.map(normalizeAttraction).sort((a, b) => a.displayOrder - b.displayOrder),
-    imageFocalPoint: { x: Number(destination.imageFocalPoint?.x ?? 50), y: Number(destination.imageFocalPoint?.y ?? 50) },
+    imageFocalPoint: destination.imageFocalPoint || parseImagePosition(destination.cardImagePosition),
     locationConfirmed: Boolean(destination.locationConfirmed ?? (hasCoordinates(destination) || (Number.isFinite(defaults[1]) && Number.isFinite(defaults[2])))),
     draftStep: Number.isFinite(Number(destination.draftStep)) ? Number(destination.draftStep) : 0,
     lastSavedStep: destination.lastSavedStep != null && Number.isFinite(Number(destination.lastSavedStep)) ? Number(destination.lastSavedStep) : ([DESTINATION_STATUS.ACTIVE, DESTINATION_STATUS.READY_FOR_REVIEW].includes(status) ? 6 : 0),
     lastCompletedStep: destination.lastCompletedStep != null && Number.isFinite(Number(destination.lastCompletedStep)) ? Number(destination.lastCompletedStep) : ([DESTINATION_STATUS.ACTIVE, DESTINATION_STATUS.READY_FOR_REVIEW].includes(status) ? 6 : 0),
     updatedAt: destination.updatedAt || destination.lastUpdatedAt || null, lastUpdatedAt: destination.lastUpdatedAt || destination.updatedAt || null, lastUpdatedSection: destination.lastUpdatedSection || '',
   }
+}
+
+function parseImagePosition(value) {
+  const match = typeof value === 'string' ? value.match(/^([\d.]+)%\s+([\d.]+)%$/) : null
+  return { x: Number(match?.[1] ?? 50), y: Number(match?.[2] ?? 50) }
 }
 
 function numberOrNull(value) { const number = Number(value); return value === '' || value == null || !Number.isFinite(number) ? null : number }

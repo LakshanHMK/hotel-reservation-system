@@ -11,7 +11,9 @@ const romanticGetawayImage = new URL('../assets/images/home/romantic-getaway.png
 const familyHolidayImage = new URL('../assets/images/home/family-holiday.png', import.meta.url).href
 const sigiriyaImage = new URL('../assets/images/sigiriya.png', import.meta.url).href
 const yalaImage = new URL('../assets/images/yala.png', import.meta.url).href
-const apiBaseUrl = (import.meta.env?.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const apiBaseUrl = (typeof __LANKASTAY_API_BASE__ !== 'undefined'
+  ? __LANKASTAY_API_BASE__
+  : (import.meta.env?.VITE_API_URL || 'http://localhost:8080')).replace(/\/$/, '')
 // Older seeded room records omitted this directory. Keep the API values
 // compatible without copying the source images into public/.
 const legacyImagePaths = {

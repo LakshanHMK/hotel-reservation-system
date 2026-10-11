@@ -65,4 +65,12 @@ class MediaStorageServiceTest {
         assertTrue(result.getFilename().endsWith(".png"));
         assertEquals("image/png", result.getMimeType());
     }
+    @Test void storedImageRemainsReadableAfterStorageServiceRestart() throws Exception {
+        var result = storage.storeFile(new MockMultipartFile("file", "cover.png", "image/png", image("png")));
+        assertTrue(result.getUrl().matches("/uploads/destinations/dest_[0-9a-f-]+\\.png"));
+        Path stored = directory.resolve("destinations").resolve(result.getFilename());
+        assertTrue(Files.isRegularFile(stored));
+        new MediaStorageService(directory.toString());
+        assertNotNull(ImageIO.read(stored.toFile()), "a normal service restart must not remove stored media");
+    }
 }

@@ -14,6 +14,8 @@ import { initialHotelCollectionIds } from '../data/stayCollections.js'
 import { resolveHotelCollectionIds } from '../utils/stayCollectionDomain.js'
 import { getHotelMainImage } from '../utils/hotelMedia.js'
 import { hotelApi } from '../services/hotelApi.js'
+import initialHotels from '../data/hotels.js'
+import { isStaticPreview } from '../config/staticPreview.js'
 
 function getFacilityIds(names, facilities) {
   return (Array.isArray(names) ? names : []).map((name) => {
@@ -71,6 +73,12 @@ export function HotelsProvider({ children }) {
 
   // Customer discovery is always loaded from the public backend contract.
   useEffect(() => {
+    if (isStaticPreview) {
+      setPublicHotelRecords(normalizeApiHotels(initialHotels))
+      setHotelsLoading(false)
+      setHotelsError('')
+      return undefined
+    }
     let active = true
     setHotelsLoading(true)
     setHotelsError('')
@@ -134,6 +142,13 @@ export function HotelsProvider({ children }) {
   const getHotelById = useCallback((id) => resolvedHotels.find((hotel) => String(hotel.id) === String(id)), [resolvedHotels])
 
   const loadPublicHotel = useCallback(async (identifier) => {
+    if (isStaticPreview) {
+      const demoHotel = initialHotels.find((item) => String(item.id) === String(identifier))
+      if (!demoHotel) throw new Error('This sample Hotel is unavailable in the frontend preview.')
+      const normalized = normalizeApiHotels([demoHotel])[0]
+      setPublicHotelRecords((current) => [...current.filter((hotel) => String(hotel.id) !== String(normalized.id)), normalized])
+      return normalized
+    }
     const response = await hotelApi.getPublicHotel(identifier)
     const normalized = normalizeApiHotels([response])[0]
     setPublicHotelRecords((current) => [...current.filter((hotel) => String(hotel.id) !== String(normalized.id)), normalized])

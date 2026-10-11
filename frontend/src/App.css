@@ -38,3 +38,11 @@
   margin-bottom: 0;
   color: #52605a;
 }
+.static-preview-notice {
+  padding: 0.65rem 1rem;
+  color: #173b35;
+  background: #e9f3ef;
+  border-bottom: 1px solid #c9ded5;
+  text-align: center;
+  font-size: 0.875rem;
+}
